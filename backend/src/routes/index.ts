@@ -1,0 +1,162 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { register, login, me, refresh, logout, logoutAll, savePushToken } from '../modules/auth/auth.controller.js';
+import { validateBody, validateQuery } from '../middleware/zodValidate.js';
+import { registerSchema, loginSchema, refreshSchema, expoPushTokenBodySchema } from '../modules/auth/auth.schemas.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import { getProducts, getProduct, productAutocomplete } from '../modules/products/product.controller.js';
+import { productListQuerySchema } from '../modules/products/product.schemas.js';
+import { getCategories, getCategoryTree } from '../modules/categories/category.controller.js';
+import { createCartItem, deleteCartItem, fetchCart, patchCartItem } from '../modules/cart/cart.controller.js';
+import { myOrders, placeOrder, trackOrder } from '../modules/orders/order.controller.js';
+import { checkoutPreviewQuerySchema, checkoutSchema } from '../modules/orders/checkout.schema.js';
+import { checkoutPreview } from '../modules/orders/checkout.controller.js';
+import { downloadOrderInvoice } from '../modules/orders/invoice.controller.js';
+import { lookupPincode } from '../modules/delivery/delivery.controller.js';
+import { postReview } from '../modules/reviews/review.controller.js';
+import { createReviewSchema } from '../modules/reviews/review.schemas.js';
+import adminRouter from './admin.routes.js';
+import { createRzpOrder, verifyRzpPayment } from '../modules/payments/razorpay.controller.js';
+import { rzpCreateOrderSchema, rzpVerifySchema } from '../modules/payments/razorpay.schemas.js';
+import { listPublicBanners } from '../modules/banners/publicBanner.controller.js';
+import { walletGetSummary, walletListTransactions, walletRemove, walletUse } from '../modules/wallet/wallet.controller.js';
+import { walletTransactionsQuerySchema, walletUseBodySchema } from '../modules/wallet/wallet.schemas.js';
+import {
+  bankAccountsCreate,
+  bankAccountsDelete,
+  bankAccountsList,
+  bankAccountsUpdate
+} from '../modules/wallet/bankAccount.controller.js';
+import {
+  withdrawalRulesGet,
+  withdrawalsCancel,
+  withdrawalsCreate,
+  withdrawalsList
+} from '../modules/wallet/withdrawalCustomer.controller.js';
+import {
+  bankAccountBodySchema,
+  withdrawalCreateBodySchema,
+  withdrawalListQuerySchema
+} from '../modules/wallet/walletWithdrawal.schemas.js';
+import {
+  referralBinarySummary,
+  referralCommissions,
+  referralDirects,
+  referralMe,
+  referralPlaceBinary,
+  referralTree
+} from '../modules/referral/referral.controller.js';
+import { placeBinaryBodySchema } from '../modules/referral/referral.schemas.js';
+import { mlmStats } from '../modules/mlm/mlm.controller.js';
+import { getBinaryStats } from '../modules/referral/binary.controller.js';
+import { getIncomeHistory } from '../modules/income/income.controller.js';
+import { getLeaderboard } from '../modules/leaderboard/leaderboard.controller.js';
+import { notificationsList } from '../modules/notifications/notifications.controller.js';
+import { kycStatusGet, kycSubmitPost } from '../modules/kyc/kyc.controller.js';
+import { postComplaint } from '../modules/compliance/complaint.controller.js';
+import { complaintCreateSchema } from '../modules/compliance/complaint.schemas.js';
+
+const router = Router();
+const kycUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+router.get('/health', (_req, res) => res.json({ success: true, message: 'Vivan API is running' }));
+
+router.post('/auth/register', validateBody(registerSchema), asyncHandler(register));
+router.post('/auth/login', validateBody(loginSchema), asyncHandler(login));
+router.post('/auth/refresh', validateBody(refreshSchema), asyncHandler(refresh));
+router.post('/auth/logout', validateBody(refreshSchema), asyncHandler(logout));
+router.get('/auth/me', requireAuth, asyncHandler(me));
+router.post(
+  '/auth/push-token',
+  requireAuth,
+  validateBody(expoPushTokenBodySchema),
+  asyncHandler(savePushToken)
+);
+router.post('/auth/logout-all', requireAuth, asyncHandler(logoutAll));
+
+router.get('/banners', asyncHandler(listPublicBanners));
+
+router.get('/delivery/pincode/:pincode(\\d{3,10})', asyncHandler(lookupPincode));
+
+router.get('/categories', asyncHandler(getCategories));
+router.get('/categories/tree', asyncHandler(getCategoryTree));
+
+router.get('/products/autocomplete', asyncHandler(productAutocomplete));
+router.get('/products', validateQuery(productListQuerySchema), asyncHandler(getProducts));
+router.get('/products/:slug', asyncHandler(getProduct));
+
+router.post(
+  '/products/:slug/reviews',
+  requireAuth,
+  validateBody(createReviewSchema),
+  asyncHandler(postReview)
+);
+
+router.get('/cart', requireAuth, asyncHandler(fetchCart));
+router.post('/cart', requireAuth, asyncHandler(createCartItem));
+router.patch('/cart/:itemId', requireAuth, asyncHandler(patchCartItem));
+router.delete('/cart/:itemId', requireAuth, asyncHandler(deleteCartItem));
+
+router.get('/checkout/preview', requireAuth, validateQuery(checkoutPreviewQuerySchema), asyncHandler(checkoutPreview));
+
+router.get('/wallet', requireAuth, asyncHandler(walletGetSummary));
+router.get('/wallet/transactions', requireAuth, validateQuery(walletTransactionsQuerySchema), asyncHandler(walletListTransactions));
+router.post('/wallet/use', requireAuth, validateBody(walletUseBodySchema), asyncHandler(walletUse));
+router.post('/wallet/remove', requireAuth, asyncHandler(walletRemove));
+
+router.get('/wallet/bank-accounts', requireAuth, asyncHandler(bankAccountsList));
+router.post('/wallet/bank-accounts', requireAuth, validateBody(bankAccountBodySchema), asyncHandler(bankAccountsCreate));
+router.put(
+  '/wallet/bank-accounts/:id(\\d+)',
+  requireAuth,
+  validateBody(bankAccountBodySchema),
+  asyncHandler(bankAccountsUpdate)
+);
+router.delete('/wallet/bank-accounts/:id(\\d+)', requireAuth, asyncHandler(bankAccountsDelete));
+
+router.get('/wallet/withdrawal-rules', requireAuth, asyncHandler(withdrawalRulesGet));
+router.get('/wallet/withdrawals', requireAuth, validateQuery(withdrawalListQuerySchema), asyncHandler(withdrawalsList));
+router.post('/wallet/withdrawals', requireAuth, validateBody(withdrawalCreateBodySchema), asyncHandler(withdrawalsCreate));
+router.post('/wallet/withdrawals/:id(\\d+)/cancel', requireAuth, asyncHandler(withdrawalsCancel));
+
+router.get('/referral/me', requireAuth, asyncHandler(referralMe));
+router.get('/referral/tree', requireAuth, asyncHandler(referralTree));
+router.get('/referral/directs', requireAuth, asyncHandler(referralDirects));
+router.get('/referral/commissions', requireAuth, asyncHandler(referralCommissions));
+router.get('/referral/binary-summary', requireAuth, asyncHandler(referralBinarySummary));
+router.post('/referral/place-binary', requireAuth, validateBody(placeBinaryBodySchema), asyncHandler(referralPlaceBinary));
+
+router.get('/mlm/stats', requireAuth, asyncHandler(mlmStats));
+router.get('/binary/stats', requireAuth, asyncHandler(getBinaryStats));
+router.get('/income/history', requireAuth, asyncHandler(getIncomeHistory));
+router.get('/leaderboard', requireAuth, asyncHandler(getLeaderboard));
+router.get('/notifications', requireAuth, asyncHandler(notificationsList));
+
+router.get('/kyc/status', requireAuth, asyncHandler(kycStatusGet));
+router.post(
+  '/kyc/submit',
+  requireAuth,
+  kycUpload.fields([
+    { name: 'panDocument', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 }
+  ]),
+  asyncHandler(kycSubmitPost)
+);
+
+router.post('/complaints', requireAuth, validateBody(complaintCreateSchema), asyncHandler(postComplaint));
+
+router.post('/orders', requireAuth, validateBody(checkoutSchema), asyncHandler(placeOrder));
+router.get('/orders/my', requireAuth, asyncHandler(myOrders));
+router.get('/orders/:id(\\d+)/invoice', requireAuth, asyncHandler(downloadOrderInvoice));
+router.get('/orders/track/:orderNumber', asyncHandler(trackOrder));
+
+router.post('/payments/razorpay/order', requireAuth, validateBody(rzpCreateOrderSchema), asyncHandler(createRzpOrder));
+router.post('/payments/razorpay/verify', requireAuth, validateBody(rzpVerifySchema), asyncHandler(verifyRzpPayment));
+
+router.use('/admin', adminRouter);
+
+export default router;

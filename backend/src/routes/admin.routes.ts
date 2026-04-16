@@ -1,0 +1,205 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import { validateBody, validateQuery } from '../middleware/zodValidate.js';
+import { adminDashboard } from '../modules/admin/adminDashboard.controller.js';
+import { adminStats } from '../modules/admin/adminStats.controller.js';
+import { adminProfitPrediction } from '../modules/admin/adminPrediction.controller.js';
+import { adminRiskStatus } from '../modules/admin/risk.controller.js';
+import { adminFraudOverviewGet, adminFraudScanUser } from '../modules/admin/fraud.controller.js';
+import { adminKycDecision, adminKycPendingList } from '../modules/kyc/kyc.admin.controller.js';
+import { kycAdminDecisionBodySchema } from '../modules/kyc/kyc.schemas.js';
+import { adminScoringRecalculate } from '../modules/scoring/scoring.admin.controller.js';
+import {
+  adminComplaintPatch,
+  adminComplaintsList
+} from '../modules/compliance/complaint.admin.controller.js';
+import {
+  adminComplaintListQuerySchema,
+  adminComplaintPatchSchema
+} from '../modules/compliance/complaint.schemas.js';
+import {
+  adminProductCreate,
+  adminProductDelete,
+  adminProductGet,
+  adminProductPatchFlags,
+  adminProductsList,
+  adminProductSuggestIdentifiers,
+  adminProductUpdate
+} from '../modules/admin/adminProduct.controller.js';
+import {
+  adminProductBodySchema,
+  adminProductFlagsSchema,
+  adminProductListQuerySchema,
+  adminProductSuggestQuerySchema,
+  adminCategoryBodySchema,
+  adminOrderListQuerySchema,
+  adminOrderStatusSchema,
+  adminBannerBodySchema,
+  adminPincodeBodySchema
+} from '../modules/admin/admin.schemas.js';
+import { adminUploadImage } from '../modules/admin/adminUpload.controller.js';
+import {
+  adminPincodeCreate,
+  adminPincodeDelete,
+  adminPincodeUpdate,
+  adminPincodesList
+} from '../modules/admin/adminPincode.controller.js';
+import { adminCategoriesList, adminCategoryCreate, adminCategoryUpdate } from '../modules/admin/adminCategory.controller.js';
+import { adminOrdersList, adminOrderGet, adminOrderPatchStatus } from '../modules/admin/adminOrder.controller.js';
+import {
+  adminBannersList,
+  adminBannerCreate,
+  adminBannerUpdate,
+  adminBannerDelete
+} from '../modules/admin/adminBanner.controller.js';
+import { adminBrandsList } from '../modules/admin/adminBrand.controller.js';
+import {
+  adminWalletCredit,
+  adminWalletDebit,
+  adminWalletGet,
+  adminWalletsList,
+  adminWalletRefund,
+  adminWalletUnlockFraud
+} from '../modules/wallet/adminWallet.controller.js';
+import {
+  adminWalletAdjustBodySchema,
+  adminWalletListQuerySchema,
+  adminWalletRefundBodySchema
+} from '../modules/wallet/wallet.schemas.js';
+import {
+  adminWithdrawalGet,
+  adminWithdrawalMarkPaid,
+  adminWithdrawalReject,
+  adminWithdrawalApprove,
+  adminWithdrawalsList,
+  adminWithdrawalSettingsGet,
+  adminWithdrawalSettingsPut
+} from '../modules/wallet/adminWithdrawal.controller.js';
+import {
+  adminWithdrawalListQuerySchema,
+  adminWithdrawalRemarksSchema,
+  withdrawalSettingsPutSchema
+} from '../modules/wallet/walletWithdrawal.schemas.js';
+import {
+  adminBinaryDailyList,
+  adminCommissionsList,
+  adminCommissionsRecalculate,
+  adminReferralBinaryTreeD3,
+  adminReferralsUserDetail,
+  adminReferralsUsersList
+} from '../modules/referral/referral.admin.controller.js';
+import { adminRecalculateCommissionsSchema } from '../modules/referral/referral.schemas.js';
+import {
+  adminBinaryCarryAdjust,
+  adminBinaryCarryListController,
+  adminBinaryCarryRecalculate,
+  adminGetCompensationSettings,
+  adminListManualAdjustments,
+  adminPostManualAdjustment,
+  adminPutCompensationSettings
+} from '../modules/mlm/compensation.controller.js';
+import {
+  binaryCarryAdjustSchema,
+  compensationSettingsPutSchema,
+  manualAdjustmentBodySchema
+} from '../modules/mlm/compensation.schemas.js';
+
+const r = Router();
+r.use(requireAuth, requireRole('admin'));
+
+const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+r.get('/dashboard', asyncHandler(adminDashboard));
+r.get('/stats', asyncHandler(adminStats));
+r.get('/stats/prediction', asyncHandler(adminProfitPrediction));
+r.get('/risk/status', asyncHandler(adminRiskStatus));
+r.get('/fraud/overview', asyncHandler(adminFraudOverviewGet));
+r.post('/fraud/scan/:userId(\\d+)', asyncHandler(adminFraudScanUser));
+
+r.get('/kyc/pending', asyncHandler(adminKycPendingList));
+r.post(
+  '/kyc/records/:recordId(\\d+)/decision',
+  validateBody(kycAdminDecisionBodySchema),
+  asyncHandler(adminKycDecision)
+);
+
+r.post('/users/:userId(\\d+)/scoring/recalculate', asyncHandler(adminScoringRecalculate));
+
+r.get('/complaints', validateQuery(adminComplaintListQuerySchema), asyncHandler(adminComplaintsList));
+r.patch(
+  '/complaints/:id(\\d+)',
+  validateBody(adminComplaintPatchSchema),
+  asyncHandler(adminComplaintPatch)
+);
+
+r.get('/brands', asyncHandler(adminBrandsList));
+
+r.post('/upload/image', uploadMem.single('file'), asyncHandler(adminUploadImage));
+
+r.get('/pincodes', asyncHandler(adminPincodesList));
+r.post('/pincodes', validateBody(adminPincodeBodySchema), asyncHandler(adminPincodeCreate));
+r.put('/pincodes/:id(\\d+)', validateBody(adminPincodeBodySchema), asyncHandler(adminPincodeUpdate));
+r.delete('/pincodes/:id(\\d+)', asyncHandler(adminPincodeDelete));
+
+r.get('/products', validateQuery(adminProductListQuerySchema), asyncHandler(adminProductsList));
+r.get(
+  '/products/suggest-identifiers',
+  validateQuery(adminProductSuggestQuerySchema),
+  asyncHandler(adminProductSuggestIdentifiers)
+);
+r.post('/products', validateBody(adminProductBodySchema), asyncHandler(adminProductCreate));
+r.get('/products/:id(\\d+)', asyncHandler(adminProductGet));
+r.patch('/products/:id(\\d+)/flags', validateBody(adminProductFlagsSchema), asyncHandler(adminProductPatchFlags));
+r.put('/products/:id(\\d+)', validateBody(adminProductBodySchema), asyncHandler(adminProductUpdate));
+r.delete('/products/:id(\\d+)', asyncHandler(adminProductDelete));
+
+r.get('/categories', asyncHandler(adminCategoriesList));
+r.post('/categories', validateBody(adminCategoryBodySchema), asyncHandler(adminCategoryCreate));
+r.put('/categories/:id(\\d+)', validateBody(adminCategoryBodySchema), asyncHandler(adminCategoryUpdate));
+
+r.get('/wallets', validateQuery(adminWalletListQuerySchema), asyncHandler(adminWalletsList));
+r.get('/wallets/:userId(\\d+)', asyncHandler(adminWalletGet));
+r.post('/wallets/:userId(\\d+)/credit', validateBody(adminWalletAdjustBodySchema), asyncHandler(adminWalletCredit));
+r.post('/wallets/:userId(\\d+)/debit', validateBody(adminWalletAdjustBodySchema), asyncHandler(adminWalletDebit));
+r.post('/wallets/:userId(\\d+)/refund', validateBody(adminWalletRefundBodySchema), asyncHandler(adminWalletRefund));
+r.post('/wallets/:userId(\\d+)/unlock-fraud', asyncHandler(adminWalletUnlockFraud));
+
+r.get('/withdrawals', validateQuery(adminWithdrawalListQuerySchema), asyncHandler(adminWithdrawalsList));
+r.get('/withdrawals/:id(\\d+)', asyncHandler(adminWithdrawalGet));
+r.post('/withdrawals/:id(\\d+)/approve', validateBody(adminWithdrawalRemarksSchema), asyncHandler(adminWithdrawalApprove));
+r.post('/withdrawals/:id(\\d+)/reject', validateBody(adminWithdrawalRemarksSchema), asyncHandler(adminWithdrawalReject));
+r.post('/withdrawals/:id(\\d+)/mark-paid', validateBody(adminWithdrawalRemarksSchema), asyncHandler(adminWithdrawalMarkPaid));
+r.get('/withdrawal-settings', asyncHandler(adminWithdrawalSettingsGet));
+r.put('/withdrawal-settings', validateBody(withdrawalSettingsPutSchema), asyncHandler(adminWithdrawalSettingsPut));
+
+r.get('/orders', validateQuery(adminOrderListQuerySchema), asyncHandler(adminOrdersList));
+r.get('/orders/:id(\\d+)', asyncHandler(adminOrderGet));
+r.patch('/orders/:id(\\d+)/status', validateBody(adminOrderStatusSchema), asyncHandler(adminOrderPatchStatus));
+
+r.get('/compensation-settings', asyncHandler(adminGetCompensationSettings));
+r.put('/compensation-settings', validateBody(compensationSettingsPutSchema), asyncHandler(adminPutCompensationSettings));
+r.post('/commissions/manual-adjustment', validateBody(manualAdjustmentBodySchema), asyncHandler(adminPostManualAdjustment));
+r.get('/commissions/manual-adjustments', asyncHandler(adminListManualAdjustments));
+r.get('/binary-carry', asyncHandler(adminBinaryCarryListController));
+r.post('/binary-carry/:userId(\\d+)/adjust', validateBody(binaryCarryAdjustSchema), asyncHandler(adminBinaryCarryAdjust));
+r.post('/binary-carry/:userId(\\d+)/recalculate', asyncHandler(adminBinaryCarryRecalculate));
+
+r.get('/referrals/users', asyncHandler(adminReferralsUsersList));
+r.get('/referrals/:userId(\\d+)/binary-tree-d3', asyncHandler(adminReferralBinaryTreeD3));
+r.get('/referrals/:userId(\\d+)', asyncHandler(adminReferralsUserDetail));
+r.get('/commissions', asyncHandler(adminCommissionsList));
+r.get('/binary-daily', asyncHandler(adminBinaryDailyList));
+r.post(
+  '/commissions/recalculate/:orderId(\\d+)',
+  validateBody(adminRecalculateCommissionsSchema),
+  asyncHandler(adminCommissionsRecalculate)
+);
+
+r.get('/banners', asyncHandler(adminBannersList));
+r.post('/banners', validateBody(adminBannerBodySchema), asyncHandler(adminBannerCreate));
+r.put('/banners/:id(\\d+)', validateBody(adminBannerBodySchema), asyncHandler(adminBannerUpdate));
+r.delete('/banners/:id(\\d+)', asyncHandler(adminBannerDelete));
+
+export default r;

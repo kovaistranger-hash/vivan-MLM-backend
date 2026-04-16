@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Vivan",
+    "slug": "vivan-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "vivan",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#4c1d95" } },
+    "plugins": ["expo-notifications"]
+  }
+}

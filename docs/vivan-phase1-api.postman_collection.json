@@ -1,0 +1,138 @@
+{
+  "info": {
+    "name": "Vivan API — Phase 1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Auth, catalog, cart, checkout, orders for the Vivan platform."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/health" }
+    },
+    {
+      "name": "Auth — Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"Password123!\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register"
+      }
+    },
+    {
+      "name": "Auth — Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"member@vivan.local\",\n  \"password\": \"Member123!\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Auth — Refresh",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+        "url": "{{baseUrl}}/auth/refresh"
+      }
+    },
+    {
+      "name": "Auth — Me",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "Categories",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/categories" }
+    },
+    {
+      "name": "Categories — Tree",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/categories/tree" }
+    },
+    {
+      "name": "Products",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/products?page=1&pageSize=12&sort=newest"
+      }
+    },
+    {
+      "name": "Products — Autocomplete",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/products/autocomplete?q=viv" }
+    },
+    {
+      "name": "Product detail",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/products/aurum-daily-serum" }
+    },
+    {
+      "name": "Cart",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/cart"
+      }
+    },
+    {
+      "name": "Cart — Add",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"productId\": 1,\n  \"quantity\": 1\n}" },
+        "url": "{{baseUrl}}/cart"
+      }
+    },
+    {
+      "name": "Checkout — Place order",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"shippingName\": \"Member User\",\n  \"shippingPhone\": \"9999999999\",\n  \"shippingAddress1\": \"221B Baker Street\",\n  \"shippingCity\": \"Mumbai\",\n  \"shippingState\": \"Maharashtra\",\n  \"shippingPincode\": \"400001\",\n  \"paymentMethod\": \"cod\"\n}"
+        },
+        "url": "{{baseUrl}}/orders"
+      }
+    },
+    {
+      "name": "Orders — Mine",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/orders/my"
+      }
+    },
+    {
+      "name": "Orders — Track",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/orders/track/VVN-REPLACE" }
+    },
+    {
+      "name": "Admin — Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/admin/dashboard"
+      }
+    }
+  ]
+}
