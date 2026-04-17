@@ -39,6 +39,9 @@ if (strictEnv) {
 
 const bullmqEnabled = ['1', 'true', 'yes'].includes(String(process.env.BULLMQ_ENABLED || '').toLowerCase());
 
+/** Railway / hosted MySQL URL (`mysql://user:pass@host:3306/db`). No `DB_HOST` / `DB_USER` / discrete vars. */
+export const DB_URL = required('DB_URL');
+
 export const env = {
   port: Number(process.env.PORT || 5000),
   nodeEnv,
@@ -47,8 +50,6 @@ export const env = {
   strictEnv,
   appUrl: requiredStrict('APP_URL', 'http://localhost:5000'),
   frontendUrl: requiredStrict('FRONTEND_URL', 'http://localhost:5173'),
-  /** MySQL connection URI (e.g. `mysql://user:pass@host:3306/dbname`). */
-  dbUrl: required('DB_URL'),
   jwtAccessSecret,
   jwtRefreshSecret,
   jwtAccessExpiresIn: required('JWT_ACCESS_EXPIRES_IN', '15m'),

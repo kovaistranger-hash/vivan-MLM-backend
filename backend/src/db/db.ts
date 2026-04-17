@@ -1,6 +1,6 @@
 import mysql, { ResultSetHeader } from 'mysql2/promise';
 import type { ConnectionOptions, PoolOptions } from 'mysql2';
-import { env } from '../config/env.js';
+import { DB_URL } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -8,7 +8,7 @@ import { logger } from '../utils/logger.js';
  * (string-only `createPool(url)` cannot set those flags in mysql2).
  */
 export const pool = mysql.createPool({
-  uri: env.dbUrl,
+  uri: DB_URL,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -76,7 +76,7 @@ const referralHardReset =
 function bootstrapConnectionOptions(): ConnectionOptions {
   const ssl = { rejectUnauthorized: false } as const;
   return {
-    uri: env.dbUrl,
+    uri: DB_URL,
     namedPlaceholders: true,
     ssl
   } as ConnectionOptions;

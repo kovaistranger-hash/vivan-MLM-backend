@@ -1,12 +1,12 @@
 import mysql from 'mysql2/promise';
-import { env } from '../config/env.js';
+import { DB_URL } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 /**
  * Pool from `DB_URL`. `namedPlaceholders` + `ssl` stay on the options object so `:name` params and hosted MySQL keep working
  * (string-only `createPool(url)` cannot set those flags in mysql2).
  */
 export const pool = mysql.createPool({
-    uri: env.dbUrl,
+    uri: DB_URL,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -65,7 +65,7 @@ const referralHardReset = !tempDbReset &&
 function bootstrapConnectionOptions() {
     const ssl = { rejectUnauthorized: false };
     return {
-        uri: env.dbUrl,
+        uri: DB_URL,
         namedPlaceholders: true,
         ssl
     };
