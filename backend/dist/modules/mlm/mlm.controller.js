@@ -10,7 +10,8 @@ export async function mlmStats(req, res) {
             rightBV: 0,
             weakLeg: 'left',
             todayIncome: 0,
-            totalIncome: 0
+            totalIncome: 0,
+            rank: 'Starter'
         }));
         return;
     }
@@ -26,7 +27,8 @@ export async function mlmStats(req, res) {
             rightBV: 0,
             weakLeg: 'left',
             todayIncome: 0,
-            totalIncome: 0
+            totalIncome: 0,
+            rank: 'Starter'
         }));
     }
 }

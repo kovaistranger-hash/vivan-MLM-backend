@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS wallets (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_wallets_user (user_id),
-  CONSTRAINT fk_wallets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_wallets_active (is_active)
 );
 
@@ -41,8 +40,6 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   created_by BIGINT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_wallet_tx_wallet FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE,
-  CONSTRAINT fk_wallet_tx_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_wallet_tx_user (user_id),
   INDEX idx_wallet_tx_wallet (wallet_id),
   INDEX idx_wallet_tx_type (type),

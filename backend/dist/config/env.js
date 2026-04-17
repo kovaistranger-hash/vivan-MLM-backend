@@ -37,11 +37,8 @@ export const env = {
     strictEnv,
     appUrl: requiredStrict('APP_URL', 'http://localhost:5000'),
     frontendUrl: requiredStrict('FRONTEND_URL', 'http://localhost:5173'),
-    dbHost: required('DB_HOST'),
-    dbPort: Number(process.env.DB_PORT || 3306),
-    dbUser: required('DB_USER'),
-    dbPassword: required('DB_PASSWORD'),
-    dbName: required('DB_NAME'),
+    /** MySQL connection URI (e.g. `mysql://user:pass@host:3306/dbname`). */
+    dbUrl: required('DB_URL'),
     jwtAccessSecret,
     jwtRefreshSecret,
     jwtAccessExpiresIn: required('JWT_ACCESS_EXPIRES_IN', '15m'),
@@ -81,11 +78,10 @@ export const env = {
     /** Block withdrawals when `user_scores.score` is below this threshold. */
     scoringMinWithdrawScore: Math.min(100, Math.max(0, Number(process.env.SCORING_MIN_WITHDRAW_SCORE || 20))),
     /** Recompute `user_scores` when older than this many hours. */
-    scoringCacheTtlMs: Math.max(60_000, Number(process.env.SCORING_CACHE_HOURS || 24) * 3_600_000)
+    scoringCacheTtlMs: Math.max(60_000, Number(process.env.SCORING_CACHE_HOURS || 24) * 3_600_000),
+    /** Optional Expo push API token (Expo account → Access tokens) for server-side notifications. */
+    expoAccessToken: process.env.EXPO_ACCESS_TOKEN || ''
 };
 if (!Number.isFinite(env.port) || env.port < 1 || env.port > 65535) {
     throw new Error(`Invalid PORT: ${process.env.PORT}`);
-}
-if (!Number.isFinite(env.dbPort) || env.dbPort < 1 || env.dbPort > 65535) {
-    throw new Error(`Invalid DB_PORT: ${process.env.DB_PORT}`);
 }

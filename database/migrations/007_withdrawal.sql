@@ -18,8 +18,7 @@ CREATE TABLE IF NOT EXISTS withdrawal_settings (
   allow_bank_transfer TINYINT(1) NOT NULL DEFAULT 1,
   one_pending_request_only TINYINT(1) NOT NULL DEFAULT 1,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  updated_by BIGINT UNSIGNED NULL,
-  CONSTRAINT fk_withdrawal_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+  updated_by BIGINT UNSIGNED NULL
 );
 
 INSERT IGNORE INTO withdrawal_settings (id) VALUES (1);
@@ -37,8 +36,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
   is_verified TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_bank_user (user_id),
-  CONSTRAINT fk_bank_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_bank_user (user_id)
 );
 
 CREATE TABLE IF NOT EXISTS withdrawal_requests (
@@ -56,10 +54,7 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_wd_user_status (user_id, status),
-  INDEX idx_wd_status (status),
-  CONSTRAINT fk_wd_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_wd_bank FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_wd_processed_by FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+  INDEX idx_wd_status (status)
 );
 
 ALTER TABLE wallet_transactions

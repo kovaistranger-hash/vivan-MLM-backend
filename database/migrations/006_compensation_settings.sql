@@ -21,8 +21,7 @@ CREATE TABLE IF NOT EXISTS compensation_settings (
   refund_reversal_enabled TINYINT(1) NOT NULL DEFAULT 1,
   minimum_order_profit DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  updated_by BIGINT UNSIGNED NULL,
-  CONSTRAINT fk_comp_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+  updated_by BIGINT UNSIGNED NULL
 );
 
 INSERT IGNORE INTO compensation_settings (id) VALUES (1);
@@ -43,10 +42,7 @@ CREATE TABLE IF NOT EXISTS commission_manual_adjustments (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_man_user (user_id),
   INDEX idx_man_order (order_id),
-  INDEX idx_man_created (created_at),
-  CONSTRAINT fk_man_adj_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_man_adj_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
-  CONSTRAINT fk_man_adj_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+  INDEX idx_man_created (created_at)
 );
 
 ALTER TABLE commission_transactions

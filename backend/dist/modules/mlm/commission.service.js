@@ -6,6 +6,7 @@ import { getCompensationSettings, getCompensationSettingsForUpdate, serializeSet
 import { env } from '../../config/env.js';
 import { computeOptimizedBinaryRateDecimal } from './optimizer.service.js';
 import { logger } from '../../utils/logger.js';
+import { createNotification } from '../notifications/notification.service.js';
 function round2(n) {
     return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 }
@@ -94,6 +95,7 @@ export async function grantWelcomeBonusIfNeeded(c, userId) {
     await c.query(`INSERT INTO commission_transactions (
        user_id, order_id, commission_type, gross_amount, amount, wallet_amount, ceiling_blocked_amount, wallet_transaction_id, metadata_json, settings_snapshot_json
      ) VALUES (?, NULL, 'welcome_bonus', ?, ?, ?, 0, ?, JSON_OBJECT('currency','INR'), ?)`, [userId, amt, amt, amt, walletTransactionId, snap]);
+    await createNotification(c, userId, `Welcome bonus of ₹${amt} credited to your wallet.`);
     await c.query('UPDATE referral_users SET welcome_bonus_at = CURRENT_TIMESTAMP WHERE user_id = ?', [userId]);
 }
 /** Ensures a `binary_carry` row exists (0,0) for BV / placement logic and commissions. */
@@ -247,6 +249,7 @@ export async function processDeliveredOrderCommissionsConn(c, orderId) {
             JSON.stringify({ buyerUserId: buyerId, orderNumber }),
             snap
         ]);
+        await createNotification(c, sponsorId, `Direct referral commission ₹${directCommission} credited (order #${orderNumber}).`);
     }
     if (s.binary_income_enabled && s.carry_forward_enabled) {
         const adds = await distributeBVConn(c, buyerId, profit);

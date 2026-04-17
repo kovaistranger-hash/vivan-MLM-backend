@@ -1,7 +1,7 @@
 import { pool } from '../../db/mysql.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { getOrCreateWallet, creditWallet, debitWallet } from '../wallet/wallet.service.js';
-import { ensureReferralSchemaExists } from './referralSchema.service.js';
+import { ensureReferralSchemaExists } from '../mlm/schema.service.js';
 import { getCompensationSettings, getCompensationSettingsForUpdate, serializeSettingsSnapshot } from './compensationSettings.service.js';
 import { env } from '../../config/env.js';
 import { computeOptimizedBinaryRateDecimal } from './optimizer.service.js';

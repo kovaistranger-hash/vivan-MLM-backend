@@ -16,16 +16,14 @@ CREATE TABLE IF NOT EXISTS kyc_records (
   verified_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_kyc_user_status (user_id, status),
-  INDEX idx_kyc_created (created_at),
-  CONSTRAINT fk_kyc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_kyc_created (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS user_scores (
   user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   score INT NOT NULL DEFAULT 0,
   level VARCHAR(20) NOT NULL DEFAULT 'Bronze',
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_user_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- users.kyc_level is added by app bootstrap if missing (see referralSchema.service).

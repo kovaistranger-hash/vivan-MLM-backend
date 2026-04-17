@@ -47,11 +47,8 @@ export const env = {
   strictEnv,
   appUrl: requiredStrict('APP_URL', 'http://localhost:5000'),
   frontendUrl: requiredStrict('FRONTEND_URL', 'http://localhost:5173'),
-  dbHost: required('DB_HOST'),
-  dbPort: Number(process.env.DB_PORT || 3306),
-  dbUser: required('DB_USER'),
-  dbPassword: required('DB_PASSWORD'),
-  dbName: required('DB_NAME'),
+  /** MySQL connection URI (e.g. `mysql://user:pass@host:3306/dbname`). */
+  dbUrl: required('DB_URL'),
   jwtAccessSecret,
   jwtRefreshSecret,
   jwtAccessExpiresIn: required('JWT_ACCESS_EXPIRES_IN', '15m'),
@@ -100,8 +97,4 @@ export const env = {
 
 if (!Number.isFinite(env.port) || env.port < 1 || env.port > 65535) {
   throw new Error(`Invalid PORT: ${process.env.PORT}`);
-}
-
-if (!Number.isFinite(env.dbPort) || env.dbPort < 1 || env.dbPort > 65535) {
-  throw new Error(`Invalid DB_PORT: ${process.env.DB_PORT}`);
 }

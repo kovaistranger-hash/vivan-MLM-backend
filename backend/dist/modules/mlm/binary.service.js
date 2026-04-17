@@ -4,6 +4,9 @@ import { getCompensationSettings, getCompensationSettingsForUpdate, serializeSet
 import { ensureBinaryCarryRow, getIndiaDateString, resolveEffectiveBinaryCommissionRate } from './commission.service.js';
 import { ensureReferralSchemaExists } from './schema.service.js';
 import { logger } from '../../utils/logger.js';
+import { createNotification } from '../notifications/notification.service.js';
+import { sendExpoPushToUser } from '../notifications/expoPush.service.js';
+import { updateUserRank } from './rank.service.js';
 function isMysqlDuplicateKey(err) {
     return Boolean(err && typeof err === 'object' && 'code' in err && err.code === 'ER_DUP_ENTRY');
 }
@@ -58,6 +61,9 @@ export async function settleBinaryForAncestor(c, ancestorUserId, orderId, orderN
                 : `Binary match settlement (admin standstill #${ancestorUserId})`
         });
         walletTxId = walletTransactionId;
+        await createNotification(c, ancestorUserId, orderId
+            ? `Binary match commission ₹${payNow} credited (order #${orderNumber}).`
+            : `Binary match settlement ₹${payNow} credited to your wallet.`);
         await c.query(`UPDATE binary_daily_summary SET binary_paid_total = binary_paid_total + ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_id = ? AND summary_date = ?`, [payNow, ancestorUserId, summaryDate]);
         await c.query(`INSERT INTO commission_transactions (
@@ -93,6 +99,7 @@ export async function settleBinaryForAncestor(c, ancestorUserId, orderId, orderN
         await c.query(`UPDATE binary_daily_summary SET ceiling_blocked_total = ceiling_blocked_total + ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_id = ? AND summary_date = ?`, [blocked, ancestorUserId, summaryDate]);
     }
+    await updateUserRank(ancestorUserId, L + R, c);
     matchEvents.push({
         ancestorUserId,
         matchedProfit: matched,
@@ -169,6 +176,7 @@ async function runBinaryPayoutForUser(userId) {
             referenceId: userId,
             description: `Binary cron payout (match ₹${match}, gross ₹${gross}, IST ${payoutDate})`
         });
+        await createNotification(c, userId, `Binary income ₹${net} added to your wallet (${payoutDate}).`);
         await c.query(`UPDATE binary_carry SET
          left_profit_carry = ROUND(GREATEST(0, left_profit_carry - ?), 2),
          right_profit_carry = ROUND(GREATEST(0, right_profit_carry - ?), 2),
@@ -180,7 +188,9 @@ async function runBinaryPayoutForUser(userId) {
         await ensureBinaryDailyRow(c, userId, payoutDate);
         await c.query(`UPDATE binary_daily_summary SET binary_paid_total = binary_paid_total + ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_id = ? AND summary_date = ?`, [net, userId, payoutDate]);
+        await updateUserRank(userId, L + R, c);
         await c.commit();
+        void sendExpoPushToUser(userId, 'Income credited 💰', `Binary income ₹${net} added to your wallet (${payoutDate}).`).catch(() => undefined);
         logger.info('Binary processed', {
             userId,
             payoutDate,

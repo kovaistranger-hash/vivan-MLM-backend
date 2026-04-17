@@ -2,7 +2,7 @@ import { query } from '../../db/mysql.js';
 import { getClientIp } from '../../utils/clientIp.js';
 import { jsonSafeValue } from '../../utils/jsonSafe.js';
 import { getReferralRow, toReferralProfileDto } from '../referral/referral.service.js';
-import { loginUser, refreshSession, registerUser, revokeAllRefreshTokens, revokeRefreshToken } from './auth.service.js';
+import { loginUser, refreshSession, registerUser, revokeAllRefreshTokens, revokeRefreshToken, saveExpoPushToken } from './auth.service.js';
 export async function register(req, res) {
     const result = await registerUser({ ...req.body, signupIp: getClientIp(req) });
     res.status(201).json({ success: true, ...result });
@@ -25,9 +25,14 @@ export async function logoutAll(req, res) {
     await revokeAllRefreshTokens(req.user.id);
     res.json({ success: true });
 }
+export async function savePushToken(req, res) {
+    const body = req.validatedBody;
+    await saveExpoPushToken(req.user.id, body.expoPushToken);
+    res.json({ success: true });
+}
 export async function me(req, res) {
     const uid = req.user.id;
-    const rows = await query(`SELECT u.id, u.name, u.email, u.phone, u.gst_number, u.accepted_terms, r.slug AS role
+    const rows = await query(`SELECT u.id, u.name, u.email, u.phone, u.gst_number, u.accepted_terms, u.\`rank\` AS rank, r.slug AS role
      FROM users u
      INNER JOIN roles r ON r.id = u.role_id
      WHERE u.id = :id

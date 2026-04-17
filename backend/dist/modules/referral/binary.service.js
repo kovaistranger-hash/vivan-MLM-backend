@@ -2,7 +2,7 @@ import { pool, query } from '../../db/mysql.js';
 import { creditWallet, getOrCreateWallet } from '../wallet/wallet.service.js';
 import { getCompensationSettings, getCompensationSettingsForUpdate } from './compensationSettings.service.js';
 import { getIndiaDateString, resolveEffectiveBinaryCommissionRate } from './commission.service.js';
-import { ensureReferralSchemaExists } from './referralSchema.service.js';
+import { ensureReferralSchemaExists } from '../mlm/schema.service.js';
 /** Max gross (₹) for a single cron match slice (before TDS/admin); additional clamp via `daily_binary_ceiling` room. */
 const CRON_MAX_GROSS_PER_MATCH = 10000;
 const TDS_RATE = 0.05;

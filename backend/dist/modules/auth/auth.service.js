@@ -8,6 +8,7 @@ import { findPlacement } from '../mlm/placement.service.js';
 import { createReferralProfileForNewCustomer, getUserIdByReferralCode } from '../referral/referral.service.js';
 import { writeAuditLog } from '../compliance/auditLog.service.js';
 import { ensureReferralSchemaExists } from '../mlm/schema.service.js';
+import { createNotification } from '../notifications/notification.service.js';
 async function findUserByEmail(email) {
     const rows = await query(`SELECT u.*, r.slug AS role_slug
      FROM users u
@@ -57,6 +58,11 @@ export async function registerUser(input) {
         const user = { id: userId, name: input.name, email: input.email, role: 'customer' };
         const tokens = await issueAuthTokens(user, c);
         await c.commit();
+        const sponsorRows = await query(`SELECT sponsor_user_id FROM referral_users WHERE user_id = :userId LIMIT 1`, { userId });
+        const sponsorId = sponsorRows[0]?.sponsor_user_id;
+        if (sponsorId != null && Number(sponsorId) > 0) {
+            void createNotification(undefined, Number(sponsorId), `${input.name} joined your team (new referral signup).`).catch(() => undefined);
+        }
         void writeAuditLog(`user_register:${userId}`, userId).catch(() => undefined);
         void import('../admin/fraud.service.js')
             .then(({ evaluateFraudRiskForUser }) => evaluateFraudRiskForUser(userId))
@@ -114,6 +120,13 @@ export async function revokeRefreshToken(refreshToken) {
 }
 export async function revokeAllRefreshTokens(userId) {
     await execute('DELETE FROM refresh_tokens WHERE user_id = :userId', { userId });
+}
+export async function saveExpoPushToken(userId, expoPushToken) {
+    const t = String(expoPushToken || '').trim();
+    if (t.length < 20 || t.length > 512)
+        throw new ApiError(400, 'Invalid push token');
+    await ensureReferralSchemaExists();
+    await execute(`UPDATE users SET expo_token = ? WHERE id = ?`, [t, userId]);
 }
 async function issueAuthTokens(user, conn) {
     const accessToken = signAccessToken({ id: user.id, email: user.email, role: user.role });

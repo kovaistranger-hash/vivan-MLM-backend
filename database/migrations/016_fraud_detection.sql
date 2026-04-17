@@ -13,6 +13,5 @@ CREATE TABLE IF NOT EXISTS fraud_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_fraud_user (user_id),
   INDEX idx_fraud_created (created_at),
-  INDEX idx_fraud_type (type),
-  CONSTRAINT fk_fraud_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_fraud_type (type)
 );

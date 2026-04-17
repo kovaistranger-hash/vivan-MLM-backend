@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS payments (
   raw_payload_json JSON NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   INDEX idx_payments_order (order_id),
   INDEX idx_payments_provider_order (provider, provider_order_id),
   INDEX idx_payments_status (status)

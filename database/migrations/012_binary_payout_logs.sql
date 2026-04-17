@@ -15,6 +15,5 @@ CREATE TABLE IF NOT EXISTS binary_payout_logs (
   wallet_transaction_id BIGINT UNSIGNED NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_binary (user_id, payout_date),
-  INDEX idx_binary_payout_user (user_id),
-  CONSTRAINT fk_binary_payout_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_binary_payout_user (user_id)
 );

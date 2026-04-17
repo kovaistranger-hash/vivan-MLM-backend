@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { register, login, me, refresh, logout, logoutAll } from '../modules/auth/auth.controller.js';
+import { register, login, me, refresh, logout, logoutAll, savePushToken } from '../modules/auth/auth.controller.js';
 import { validateBody, validateQuery } from '../middleware/zodValidate.js';
-import { registerSchema, loginSchema, refreshSchema } from '../modules/auth/auth.schemas.js';
+import { registerSchema, loginSchema, refreshSchema, expoPushTokenBodySchema } from '../modules/auth/auth.schemas.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getProducts, getProduct, productAutocomplete } from '../modules/products/product.controller.js';
 import { productListQuerySchema } from '../modules/products/product.schemas.js';
@@ -30,6 +30,8 @@ import { placeBinaryBodySchema } from '../modules/referral/referral.schemas.js';
 import { mlmStats } from '../modules/mlm/mlm.controller.js';
 import { getBinaryStats } from '../modules/referral/binary.controller.js';
 import { getIncomeHistory } from '../modules/income/income.controller.js';
+import { getLeaderboard } from '../modules/leaderboard/leaderboard.controller.js';
+import { notificationsList } from '../modules/notifications/notifications.controller.js';
 import { kycStatusGet, kycSubmitPost } from '../modules/kyc/kyc.controller.js';
 import { postComplaint } from '../modules/compliance/complaint.controller.js';
 import { complaintCreateSchema } from '../modules/compliance/complaint.schemas.js';
@@ -44,6 +46,7 @@ router.post('/auth/login', validateBody(loginSchema), asyncHandler(login));
 router.post('/auth/refresh', validateBody(refreshSchema), asyncHandler(refresh));
 router.post('/auth/logout', validateBody(refreshSchema), asyncHandler(logout));
 router.get('/auth/me', requireAuth, asyncHandler(me));
+router.post('/auth/push-token', requireAuth, validateBody(expoPushTokenBodySchema), asyncHandler(savePushToken));
 router.post('/auth/logout-all', requireAuth, asyncHandler(logoutAll));
 router.get('/banners', asyncHandler(listPublicBanners));
 router.get('/delivery/pincode/:pincode(\\d{3,10})', asyncHandler(lookupPincode));
@@ -79,6 +82,8 @@ router.post('/referral/place-binary', requireAuth, validateBody(placeBinaryBodyS
 router.get('/mlm/stats', requireAuth, asyncHandler(mlmStats));
 router.get('/binary/stats', requireAuth, asyncHandler(getBinaryStats));
 router.get('/income/history', requireAuth, asyncHandler(getIncomeHistory));
+router.get('/leaderboard', requireAuth, asyncHandler(getLeaderboard));
+router.get('/notifications', requireAuth, asyncHandler(notificationsList));
 router.get('/kyc/status', requireAuth, asyncHandler(kycStatusGet));
 router.post('/kyc/submit', requireAuth, kycUpload.fields([
     { name: 'panDocument', maxCount: 1 },

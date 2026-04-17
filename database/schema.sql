@@ -19,20 +19,7 @@ CREATE TABLE IF NOT EXISTS roles (
 -- Users
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  role_id BIGINT UNSIGNED NOT NULL,
-  email VARCHAR(190) NOT NULL UNIQUE,
-  phone VARCHAR(20) NULL,
-  gst_number VARCHAR(20) NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
-  is_blocked TINYINT(1) NOT NULL DEFAULT 0,
-  accepted_terms TINYINT(1) NOT NULL DEFAULT 0,
-  kyc_verified TINYINT(1) NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES roles(id)
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
 );
 
 -- ---------------------------------------------------------------------------
@@ -40,11 +27,10 @@ CREATE TABLE IF NOT EXISTS users (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS refresh_tokens (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   token_hash CHAR(64) NOT NULL,
   expires_at DATETIME NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_refresh_user (user_id),
   INDEX idx_refresh_hash (token_hash),
   INDEX idx_refresh_expires (expires_at)
@@ -66,7 +52,6 @@ CREATE TABLE IF NOT EXISTS categories (
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_categories_parent FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
   INDEX idx_categories_parent (parent_id),
   INDEX idx_categories_active (is_active)
 );
@@ -111,8 +96,6 @@ CREATE TABLE IF NOT EXISTS products (
   deleted_at DATETIME NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
-  CONSTRAINT fk_products_brand FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL,
   INDEX idx_products_category (category_id),
   INDEX idx_products_brand (brand_id),
   INDEX idx_products_active (is_active),
@@ -143,7 +126,7 @@ CREATE TABLE IF NOT EXISTS banners (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  order_id BIGINT UNSIGNED NOT NULL,
+  order_id INT UNSIGNED NOT NULL,
   provider VARCHAR(40) NOT NULL DEFAULT 'razorpay',
   provider_order_id VARCHAR(120) NULL,
   provider_payment_id VARCHAR(120) NULL,
@@ -154,7 +137,6 @@ CREATE TABLE IF NOT EXISTS payments (
   raw_payload_json JSON NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   INDEX idx_payments_order (order_id),
   INDEX idx_payments_provider_order (provider, provider_order_id),
   INDEX idx_payments_status (status)
@@ -166,15 +148,13 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS product_reviews (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   product_id BIGINT UNSIGNED NOT NULL,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   rating TINYINT UNSIGNED NOT NULL,
   title VARCHAR(200) NULL,
   body TEXT NULL,
   is_approved TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-  CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE KEY uq_review_user_product (user_id, product_id),
   INDEX idx_reviews_product (product_id),
   CONSTRAINT chk_review_rating CHECK (rating BETWEEN 1 AND 5)
@@ -185,14 +165,12 @@ CREATE TABLE IF NOT EXISTS product_reviews (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cart_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   product_id BIGINT UNSIGNED NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_cart_user_product (user_id, product_id),
-  CONSTRAINT fk_cart_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_cart_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+  UNIQUE KEY uq_cart_user_product (user_id, product_id)
 );
 
 -- ---------------------------------------------------------------------------
@@ -200,7 +178,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS wallets (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   balance DECIMAL(12,2) NOT NULL DEFAULT 0,
   held_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -208,14 +186,13 @@ CREATE TABLE IF NOT EXISTS wallets (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_wallets_user (user_id),
-  CONSTRAINT fk_wallets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_wallets_active (is_active)
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transactions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   wallet_id BIGINT UNSIGNED NOT NULL,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   type ENUM(
     'credit',
     'debit',
@@ -241,8 +218,6 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   created_by BIGINT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_wallet_tx_wallet FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE,
-  CONSTRAINT fk_wallet_tx_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_wallet_tx_user (user_id),
   INDEX idx_wallet_tx_wallet (wallet_id),
   INDEX idx_wallet_tx_type (type),
@@ -261,15 +236,14 @@ CREATE TABLE IF NOT EXISTS withdrawal_settings (
   allow_bank_transfer TINYINT(1) NOT NULL DEFAULT 1,
   one_pending_request_only TINYINT(1) NOT NULL DEFAULT 1,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  updated_by BIGINT UNSIGNED NULL,
-  CONSTRAINT fk_withdrawal_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+  updated_by BIGINT UNSIGNED NULL
 );
 
 INSERT IGNORE INTO withdrawal_settings (id) VALUES (1);
 
 CREATE TABLE IF NOT EXISTS bank_accounts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   account_holder_name VARCHAR(120) NOT NULL,
   bank_name VARCHAR(120) NOT NULL,
   account_number VARCHAR(34) NULL,
@@ -280,13 +254,12 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
   is_verified TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_bank_user (user_id),
-  CONSTRAINT fk_bank_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_bank_user (user_id)
 );
 
 CREATE TABLE IF NOT EXISTS withdrawal_requests (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   bank_account_id BIGINT UNSIGNED NOT NULL,
   amount DECIMAL(12,2) NOT NULL COMMENT 'Gross requested amount (moved to hold)',
   fee_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -299,18 +272,15 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_wd_user_status (user_id, status),
-  INDEX idx_wd_status (status),
-  CONSTRAINT fk_wd_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_wd_bank FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_wd_processed_by FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+  INDEX idx_wd_status (status)
 );
 
 -- ---------------------------------------------------------------------------
 -- Orders
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS orders (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
   order_number VARCHAR(50) NOT NULL UNIQUE,
   invoice_number VARCHAR(40) NULL UNIQUE,
   invoice_url VARCHAR(512) NULL,
@@ -340,7 +310,6 @@ CREATE TABLE IF NOT EXISTS orders (
   commission_audit_json JSON NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_orders_user (user_id),
   INDEX idx_orders_number (order_number),
   INDEX idx_orders_status (status),
@@ -364,7 +333,7 @@ CREATE TABLE IF NOT EXISTS serviceable_pincodes (
 
 CREATE TABLE IF NOT EXISTS order_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  order_id BIGINT UNSIGNED NOT NULL,
+  order_id INT UNSIGNED NOT NULL,
   product_id BIGINT UNSIGNED NULL,
   product_name VARCHAR(180) NOT NULL,
   product_slug VARCHAR(200) NULL,
@@ -374,8 +343,6 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INT NOT NULL DEFAULT 1,
   line_total DECIMAL(12,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  CONSTRAINT fk_order_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
   INDEX idx_order_items_order (order_id)
 );
 
@@ -383,11 +350,11 @@ CREATE TABLE IF NOT EXISTS order_items (
 -- Referral + binary commissions (Phase 7)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS referral_users (
-  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL PRIMARY KEY,
   referral_code VARCHAR(20) NOT NULL,
-  sponsor_user_id BIGINT UNSIGNED NULL,
+  sponsor_user_id INT UNSIGNED NULL,
   level INT NOT NULL DEFAULT 1,
-  placement_parent_user_id BIGINT UNSIGNED NULL,
+  placement_parent_user_id INT UNSIGNED NULL,
   placement_side ENUM('left', 'right') NULL,
   welcome_bonus_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -395,46 +362,39 @@ CREATE TABLE IF NOT EXISTS referral_users (
   UNIQUE KEY uq_referral_users_code (referral_code),
   UNIQUE KEY uq_referral_placement_leg (placement_parent_user_id, placement_side),
   INDEX idx_referral_sponsor (sponsor_user_id),
-  INDEX idx_referral_placement_parent (placement_parent_user_id),
-  CONSTRAINT fk_ref_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_ref_sponsor FOREIGN KEY (sponsor_user_id) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_ref_placement_parent FOREIGN KEY (placement_parent_user_id) REFERENCES users(id) ON DELETE SET NULL
+  INDEX idx_referral_placement_parent (placement_parent_user_id)
 );
 
 CREATE TABLE IF NOT EXISTS referral_tree_stats (
-  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL PRIMARY KEY,
   total_left_members INT NOT NULL DEFAULT 0,
   total_right_members INT NOT NULL DEFAULT 0,
   total_left_bv DECIMAL(14,2) NOT NULL DEFAULT 0,
   total_right_bv DECIMAL(14,2) NOT NULL DEFAULT 0,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_rts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS referral_closure (
-  ancestor_user_id BIGINT UNSIGNED NOT NULL,
-  descendant_user_id BIGINT UNSIGNED NOT NULL,
+  ancestor_user_id INT UNSIGNED NOT NULL,
+  descendant_user_id INT UNSIGNED NOT NULL,
   depth INT NOT NULL,
   leg_side ENUM('left', 'right') NULL,
   PRIMARY KEY (ancestor_user_id, descendant_user_id),
-  INDEX idx_closure_desc (descendant_user_id),
-  CONSTRAINT fk_closure_anc FOREIGN KEY (ancestor_user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_closure_desc FOREIGN KEY (descendant_user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_closure_desc (descendant_user_id)
 );
 
 CREATE TABLE IF NOT EXISTS binary_carry (
-  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL PRIMARY KEY,
   left_profit_carry DECIMAL(14,2) NOT NULL DEFAULT 0,
   right_profit_carry DECIMAL(14,2) NOT NULL DEFAULT 0,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_binary_carry_matchable (left_profit_carry, right_profit_carry),
-  CONSTRAINT fk_binary_carry_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_binary_carry_matchable (left_profit_carry, right_profit_carry)
 );
 
 CREATE TABLE IF NOT EXISTS commission_transactions (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
-  order_id BIGINT UNSIGNED NULL,
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  order_id INT UNSIGNED NULL,
   commission_type ENUM(
     'welcome_bonus',
     'direct_referral',
@@ -446,41 +406,37 @@ CREATE TABLE IF NOT EXISTS commission_transactions (
   amount DECIMAL(12,2) NOT NULL DEFAULT 0,
   wallet_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
   ceiling_blocked_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
-  wallet_transaction_id BIGINT UNSIGNED NULL,
+  wallet_transaction_id INT UNSIGNED NULL,
   metadata_json JSON NULL,
   settings_snapshot_json JSON NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_comm_user (user_id),
   INDEX idx_comm_order (order_id),
-  INDEX idx_comm_type (commission_type),
-  CONSTRAINT fk_comm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_comm_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+  INDEX idx_comm_type (commission_type)
 );
 
 CREATE TABLE IF NOT EXISTS binary_daily_summary (
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   summary_date DATE NOT NULL,
   binary_paid_total DECIMAL(12,2) NOT NULL DEFAULT 0,
   ceiling_blocked_total DECIMAL(12,2) NOT NULL DEFAULT 0,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (user_id, summary_date),
-  CONSTRAINT fk_bin_daily_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  PRIMARY KEY (user_id, summary_date)
 );
 
 CREATE TABLE IF NOT EXISTS binary_payout_logs (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
   payout_date DATE NOT NULL,
   matched_bv DECIMAL(14,2) NOT NULL,
   gross_income DECIMAL(14,2) NOT NULL,
   tds_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   admin_fee DECIMAL(14,2) NOT NULL DEFAULT 0,
   net_wallet_amount DECIMAL(14,2) NOT NULL,
-  wallet_transaction_id BIGINT UNSIGNED NULL,
+  wallet_transaction_id INT UNSIGNED NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_binary (user_id, payout_date),
-  INDEX idx_binary_payout_user (user_id),
-  CONSTRAINT fk_binary_payout_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_binary_payout_user (user_id)
 );
 
 CREATE TABLE IF NOT EXISTS system_alerts (
@@ -516,32 +472,28 @@ CREATE TABLE IF NOT EXISTS compensation_settings (
   refund_reversal_enabled TINYINT(1) NOT NULL DEFAULT 1,
   minimum_order_profit DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  updated_by BIGINT UNSIGNED NULL,
-  CONSTRAINT fk_comp_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+  updated_by BIGINT UNSIGNED NULL
 );
 
 INSERT IGNORE INTO compensation_settings (id) VALUES (1);
 
 CREATE TABLE IF NOT EXISTS commission_manual_adjustments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
-  order_id BIGINT UNSIGNED NULL,
+  user_id INT UNSIGNED NOT NULL,
+  order_id INT UNSIGNED NULL,
   adjustment_type VARCHAR(80) NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
   action ENUM('credit', 'debit') NOT NULL,
   reason VARCHAR(500) NOT NULL,
   apply_to_wallet TINYINT(1) NOT NULL DEFAULT 0,
-  wallet_transaction_id BIGINT UNSIGNED NULL,
+  wallet_transaction_id INT UNSIGNED NULL,
   commission_transaction_id BIGINT UNSIGNED NULL,
   metadata_json JSON NULL,
   created_by BIGINT UNSIGNED NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_man_user (user_id),
   INDEX idx_man_order (order_id),
-  INDEX idx_man_created (created_at),
-  CONSTRAINT fk_man_adj_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_man_adj_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
-  CONSTRAINT fk_man_adj_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+  INDEX idx_man_created (created_at)
 );
 
 -- ---------------------------------------------------------------------------
@@ -580,30 +532,28 @@ ON DUPLICATE KEY UPDATE city = VALUES(city), state = VALUES(state);
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS complaints (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   message TEXT NOT NULL,
   status ENUM('open','resolved') NOT NULL DEFAULT 'open',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_complaints_user (user_id),
-  INDEX idx_complaints_status (status),
-  CONSTRAINT fk_complaints_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_complaints_status (status)
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   action TEXT NOT NULL,
-  user_id BIGINT UNSIGNED NULL,
+  user_id INT UNSIGNED NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_audit_user (user_id),
-  INDEX idx_audit_created (created_at),
-  CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  INDEX idx_audit_created (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS payouts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   withdrawal_request_id BIGINT UNSIGNED NULL,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
   status ENUM('pending','success','failed') NOT NULL DEFAULT 'pending',
   reference_id VARCHAR(100) NULL,
@@ -612,9 +562,7 @@ CREATE TABLE IF NOT EXISTS payouts (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_payouts_withdrawal (withdrawal_request_id),
   INDEX idx_payouts_user (user_id),
-  INDEX idx_payouts_status (status),
-  CONSTRAINT fk_payouts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_payouts_wr FOREIGN KEY (withdrawal_request_id) REFERENCES withdrawal_requests(id) ON DELETE SET NULL
+  INDEX idx_payouts_status (status)
 );
 
 -- ---------------------------------------------------------------------------

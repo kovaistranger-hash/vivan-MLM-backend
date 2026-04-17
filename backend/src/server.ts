@@ -1,17 +1,16 @@
 import cron from 'node-cron';
 import { app } from './app.js';
 import { env } from './config/env.js';
-import { waitForDatabaseConnection } from './db/mysql.js';
+import { initDB } from './db/mysql.js';
 import { dispatchBinaryCronJob } from './queue/commission.dispatch.js';
 import { runBinaryDaily } from './modules/mlm/cron.service.js';
-import { ensureReferralSchemaExists } from './modules/mlm/schema.service.js';
 import { initCloudinaryFromEnv } from './modules/upload/cloudinary.service.js';
 import { logger } from './utils/logger.js';
 
 async function bootstrap() {
   initCloudinaryFromEnv();
-  await waitForDatabaseConnection();
-  await ensureReferralSchemaExists();
+  /** DB must be up and schema ensured before accepting traffic (`initDB` MUST run before `app.listen`). */
+  await initDB();
 
   if (env.bullmqEnabled) {
     const { startCommissionWorker } = await import('./queue/commission.worker.js');

@@ -18,3 +18,6 @@ export const loginSchema = z.object({
 export const refreshSchema = z.object({
     refreshToken: z.string().min(10).max(512)
 });
+export const expoPushTokenBodySchema = z.object({
+    expoPushToken: z.string().trim().min(20).max(512)
+});

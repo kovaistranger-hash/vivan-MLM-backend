@@ -8,8 +8,7 @@ CREATE TABLE IF NOT EXISTS complaints (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_complaints_user (user_id),
-  INDEX idx_complaints_status (status),
-  CONSTRAINT fk_complaints_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX idx_complaints_status (status)
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -18,8 +17,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   user_id BIGINT UNSIGNED NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_audit_user (user_id),
-  INDEX idx_audit_created (created_at),
-  CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  INDEX idx_audit_created (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS payouts (
@@ -34,7 +32,5 @@ CREATE TABLE IF NOT EXISTS payouts (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_payouts_withdrawal (withdrawal_request_id),
   INDEX idx_payouts_user (user_id),
-  INDEX idx_payouts_status (status),
-  CONSTRAINT fk_payouts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_payouts_wr FOREIGN KEY (withdrawal_request_id) REFERENCES withdrawal_requests(id) ON DELETE SET NULL
+  INDEX idx_payouts_status (status)
 );

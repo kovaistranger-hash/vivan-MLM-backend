@@ -6,6 +6,7 @@ import { evaluateFraudRiskForUser, isWalletFraudLocked } from '../admin/fraud.se
 import { assertWithdrawalKycEligible } from '../kyc/kyc.service.js';
 import { assertWithdrawalScoreAllowed } from '../scoring/scoring.service.js';
 import { applyWithdrawalHold, applyWithdrawalHoldReleaseToBalance, applyWithdrawalPaidRelease, getOrCreateWallet } from './wallet.service.js';
+import { createNotification } from '../notifications/notification.service.js';
 import { computeWithdrawalFee } from './withdrawalSettings.service.js';
 function assertBankMatchesSettings(acct, s) {
     const bankPair = !!(acct.account_number && acct.ifsc_code);
@@ -99,6 +100,10 @@ export async function createWithdrawalRequest(userId, input) {
          WHERE id = ? AND status = 'pending'`, [withdrawalId]);
         }
         await c.commit();
+        const autoApproved = Number(s.auto_approve) === 1;
+        void createNotification(undefined, userId, autoApproved
+            ? `Withdrawal request #${withdrawalId} for ₹${gross} submitted and approved.`
+            : `Withdrawal request #${withdrawalId} for ₹${gross} submitted and is pending review.`).catch(() => undefined);
         return getWithdrawalByIdForUser(userId, withdrawalId);
     }
     catch (e) {
@@ -280,6 +285,7 @@ export async function adminMarkWithdrawalPaid(withdrawalId, adminUserId, remarks
             throw new ApiError(409, 'Withdrawal state changed; please refresh');
         }
         await c.commit();
+        void createNotification(undefined, uid, `Withdrawal #${withdrawalId} marked paid. Net ₹${net} released from your wallet hold.`).catch(() => undefined);
         void writeAuditLog(`withdrawal_marked_paid:${withdrawalId}`, adminUserId).catch(() => undefined);
         void onWithdrawalMarkedPaid(withdrawalId).catch((err) => console.error('[withdrawalPayout]', err));
         return adminGetWithdrawal(withdrawalId);
