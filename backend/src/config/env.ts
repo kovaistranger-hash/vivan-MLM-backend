@@ -1,6 +1,3 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 const strictEnv =
@@ -22,6 +19,13 @@ function requiredStrict(name: string, devFallback?: string): string {
   return required(name, devFallback);
 }
 
+function splitCsv(input: string) {
+  return input
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 const jwtAccessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
 const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 if (!jwtAccessSecret || !jwtRefreshSecret) {
@@ -39,17 +43,16 @@ if (strictEnv) {
 
 const bullmqEnabled = ['1', 'true', 'yes'].includes(String(process.env.BULLMQ_ENABLED || '').toLowerCase());
 
-/** Railway / hosted MySQL URL (`mysql://user:pass@host:3306/db`). No `DB_HOST` / `DB_USER` / discrete vars. */
-export const DB_URL = required('DB_URL');
-
 export const env = {
   port: Number(process.env.PORT || 5000),
+  host: required('HOST', '::'),
   nodeEnv,
   isProduction,
   /** True when production or STRICT_ENV — stricter URL / JWT / optional Redis rules apply. */
   strictEnv,
   appUrl: requiredStrict('APP_URL', 'http://localhost:5000'),
   frontendUrl: requiredStrict('FRONTEND_URL', 'http://localhost:5173'),
+  frontendUrls: splitCsv(requiredStrict('FRONTEND_URL', 'http://localhost:5173')),
   jwtAccessSecret,
   jwtRefreshSecret,
   jwtAccessExpiresIn: required('JWT_ACCESS_EXPIRES_IN', '15m'),

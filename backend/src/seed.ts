@@ -4,7 +4,7 @@
  */
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import { pool, execute, query } from './db/mysql.js';
+import { initDB, pool, execute, query } from './db/mysql.js';
 
 async function roleId(slug: string) {
   const rows = await query<{ id: number }[]>('SELECT id FROM roles WHERE slug = :slug LIMIT 1', { slug });
@@ -13,7 +13,7 @@ async function roleId(slug: string) {
 
 async function upsertUser(email: string, name: string, password: string, roleSlug: string) {
   const rid = await roleId(roleSlug);
-  if (!rid) throw new Error(`Role ${roleSlug} missing — apply database/schema.sql first`);
+  if (!rid) throw new Error(`Role ${roleSlug} missing after schema bootstrap`);
 
   const existing = await query<{ id: number }[]>('SELECT id FROM users WHERE email = :email LIMIT 1', { email });
   const hash = await bcrypt.hash(password, 10);
@@ -45,7 +45,16 @@ async function upsertUser(email: string, name: string, password: string, roleSlu
 
 async function ensureBrand(name: string, slug: string) {
   const rows = await query<{ id: number }[]>('SELECT id FROM brands WHERE slug = :slug LIMIT 1', { slug });
-  if (rows[0]) return rows[0].id;
+  if (rows[0]) {
+    await execute(
+      `UPDATE brands
+       SET name = :name, logo_url = NULL, is_active = 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = :id`,
+      { id: rows[0].id, name }
+    );
+    return rows[0].id;
+  }
+
   const res = await execute(
     `INSERT INTO brands (name, slug, logo_url, is_active) VALUES (:name, :slug, NULL, 1)`,
     { name, slug }
@@ -60,13 +69,42 @@ async function ensureCategory(input: {
   sortOrder: number;
   description?: string;
 }) {
-  const existing = await query<{ id: number }[]>('SELECT id FROM categories WHERE slug = :slug LIMIT 1', { slug: input.slug });
-  if (existing[0]) return existing[0].id;
+  const existing = await query<{ id: number }[]>('SELECT id FROM categories WHERE slug = :slug LIMIT 1', {
+    slug: input.slug
+  });
 
   let parentId: number | null = null;
   if (input.parentSlug) {
-    const p = await query<{ id: number }[]>('SELECT id FROM categories WHERE slug = :slug LIMIT 1', { slug: input.parentSlug });
-    parentId = p[0]?.id ?? null;
+    const parentRows = await query<{ id: number }[]>('SELECT id FROM categories WHERE slug = :slug LIMIT 1', {
+      slug: input.parentSlug
+    });
+    parentId = parentRows[0]?.id ?? null;
+  }
+
+  if (existing[0]) {
+    await execute(
+      `UPDATE categories
+       SET parent_id = :parentId,
+           name = :name,
+           description = :description,
+           image_url = NULL,
+           meta_title = :metaTitle,
+           meta_description = :metaDescription,
+           sort_order = :sortOrder,
+           is_active = 1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :id`,
+      {
+        id: existing[0].id,
+        parentId,
+        name: input.name,
+        description: input.description ?? null,
+        metaTitle: `${input.name} | Vivan`,
+        metaDescription: `Shop ${input.name} on Vivan.`,
+        sortOrder: input.sortOrder
+      }
+    );
+    return existing[0].id;
   }
 
   const res = await execute(
@@ -104,8 +142,6 @@ async function ensureProduct(row: {
   bestseller?: boolean;
 }) {
   const existing = await query<{ id: number }[]>('SELECT id FROM products WHERE slug = :slug LIMIT 1', { slug: row.slug });
-  if (existing[0]) return existing[0].id;
-
   const cat = await query<{ id: number }[]>('SELECT id FROM categories WHERE slug = :slug LIMIT 1', { slug: row.categorySlug });
   const categoryId = cat[0]?.id ?? null;
 
@@ -113,6 +149,58 @@ async function ensureProduct(row: {
   if (row.brandSlug) {
     const b = await query<{ id: number }[]>('SELECT id FROM brands WHERE slug = :slug LIMIT 1', { slug: row.brandSlug });
     brandId = b[0]?.id ?? null;
+  }
+
+  const payload = {
+    categoryId,
+    brandId,
+    name: row.name,
+    slug: row.slug,
+    sku: row.sku,
+    shortDescription: row.shortDescription,
+    longDescription: `Original Vivan catalog copy for ${row.name}. Ingredients, usage, and compliance details belong here.`,
+    mrp: row.mrp,
+    sale: row.sale,
+    bv: row.bv,
+    pv: row.pv,
+    gstRate: row.gstRate,
+    stock: row.stock,
+    image: row.image,
+    featured: row.featured ? 1 : 0,
+    newArrival: row.newArrival ? 1 : 0,
+    bestseller: row.bestseller ? 1 : 0
+  };
+
+  if (existing[0]) {
+    await execute(
+      `UPDATE products
+       SET category_id = :categoryId,
+           brand_id = :brandId,
+           name = :name,
+           sku = :sku,
+           short_description = :shortDescription,
+           long_description = :longDescription,
+           mrp_price = :mrp,
+           sale_price = :sale,
+           bv = :bv,
+           pv = :pv,
+           gst_rate = :gstRate,
+           stock_qty = :stock,
+           image_url = :image,
+           gallery_json = NULL,
+           is_active = 1,
+           is_featured = :featured,
+           is_new_arrival = :newArrival,
+           is_bestseller = :bestseller,
+           deleted_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :id`,
+      {
+        ...payload,
+        id: existing[0].id
+      }
+    );
+    return existing[0].id;
   }
 
   const res = await execute(
@@ -125,31 +213,13 @@ async function ensureProduct(row: {
       :mrp, :sale, :bv, :pv, :gstRate, :stock, :image, NULL,
       1, :featured, :newArrival, :bestseller
     )`,
-    {
-      categoryId,
-      brandId,
-      name: row.name,
-      slug: row.slug,
-      sku: row.sku,
-      shortDescription: row.shortDescription,
-      longDescription: `Original Vivan catalog copy for ${row.name}. Ingredients, usage, and compliance details belong here.`,
-      mrp: row.mrp,
-      sale: row.sale,
-      bv: row.bv,
-      pv: row.pv,
-      gstRate: row.gstRate,
-      stock: row.stock,
-      image: row.image,
-      featured: row.featured ? 1 : 0,
-      newArrival: row.newArrival ? 1 : 0,
-      bestseller: row.bestseller ? 1 : 0
-    }
+    payload
   );
   return Number(res.insertId);
 }
 
 async function main() {
-  await pool.getConnection().then((c) => c.release());
+  await initDB();
 
   await upsertUser('admin@vivan.local', 'Vivan Admin', 'Admin123!', 'admin');
   await upsertUser('member@vivan.local', 'Vivan Member', 'Member123!', 'customer');
@@ -218,7 +288,7 @@ async function main() {
   await ensureProduct({
     categorySlug: 'beauty',
     brandSlug: 'vivcare-labs',
-    name: 'Lumière Tinted Moisturizer SPF 30',
+    name: 'Lumiere Tinted Moisturizer SPF 30',
     slug: 'lumiere-tinted-moisturizer',
     sku: 'VIV-BTY-002',
     shortDescription: 'Sheer coverage with a dewy, skin-first finish.',
@@ -354,11 +424,8 @@ async function main() {
 
   await execute(`INSERT IGNORE INTO compensation_settings (id) VALUES (1)`);
 
-  // eslint-disable-next-line no-console
   console.log('Seed complete.');
-  // eslint-disable-next-line no-console
   console.log('Admin: admin@vivan.local / Admin123!');
-  // eslint-disable-next-line no-console
   console.log('Member: member@vivan.local / Member123!');
 }
 

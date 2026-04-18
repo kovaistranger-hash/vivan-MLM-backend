@@ -15,6 +15,19 @@ Vivan is a full-stack starter for ecommerce (and future member-network features)
 
 ## 1. Database
 
+For Railway or any managed MySQL deployment, prefer the backend scripts below instead of applying SQL manually:
+
+```bash
+cd backend
+npm run db:migrate:plan -- --include-baseline
+npm run db:bootstrap
+npm run seed
+```
+
+This applies the baseline schema only for an empty database, records numbered migrations in `schema_migrations`, and then upserts the demo catalog data.
+
+If your database already exists and was initialized before the ledger was added, run `npm run db:migrate:adopt` once before regular `npm run db:migrate` so the migration history is recorded without replaying old SQL.
+
 **New database:**
 
 ```bash
@@ -93,6 +106,8 @@ cp .env.example .env
 ```
 
 Set at minimum: `DB_*`, JWT secrets (`JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` or legacy `JWT_SECRET`), `FRONTEND_URL`.
+
+Railway note: the backend now accepts `DATABASE_URL`, `MYSQL_URL`, `MYSQL_PRIVATE_URL`, `MYSQL_PUBLIC_URL`, or raw Railway MySQL vars such as `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`. Prefer the private URL when Railway provides it.
 
 **Cloudinary (Phase 5, optional but required for admin uploads):** set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `backend/.env`. Without them, `POST /api/admin/upload/image` returns 503.
 

@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { register, login, me, refresh, logout, logoutAll, savePushToken } from '../modules/auth/auth.controller.js';
+import { refresh, logoutWithRefresh, logoutAll, savePushToken } from '../modules/auth/auth.session.controller.js';
 import { validateBody, validateQuery } from '../middleware/zodValidate.js';
-import { registerSchema, loginSchema, refreshSchema, expoPushTokenBodySchema } from '../modules/auth/auth.schemas.js';
+import { refreshSchema, expoPushTokenBodySchema } from '../modules/auth/auth.schemas.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { getProducts, getProduct, productAutocomplete } from '../modules/products/product.controller.js';
-import { productListQuerySchema } from '../modules/products/product.schemas.js';
 import { getCategories, getCategoryTree } from '../modules/categories/category.controller.js';
 import { createCartItem, deleteCartItem, fetchCart, patchCartItem } from '../modules/cart/cart.controller.js';
 import { myOrders, placeOrder, trackOrder } from '../modules/orders/order.controller.js';
@@ -65,11 +63,12 @@ const kycUpload = multer({
 
 router.get('/health', (_req, res) => res.json({ success: true, message: 'Vivan API is running' }));
 
-router.post('/auth/register', validateBody(registerSchema), asyncHandler(register));
-router.post('/auth/login', validateBody(loginSchema), asyncHandler(login));
 router.post('/auth/refresh', validateBody(refreshSchema), asyncHandler(refresh));
-router.post('/auth/logout', validateBody(refreshSchema), asyncHandler(logout));
-router.get('/auth/me', requireAuth, asyncHandler(me));
+router.post(
+  '/auth/session/logout',
+  validateBody(refreshSchema),
+  asyncHandler(logoutWithRefresh)
+);
 router.post(
   '/auth/push-token',
   requireAuth,
@@ -84,10 +83,6 @@ router.get('/delivery/pincode/:pincode(\\d{3,10})', asyncHandler(lookupPincode))
 
 router.get('/categories', asyncHandler(getCategories));
 router.get('/categories/tree', asyncHandler(getCategoryTree));
-
-router.get('/products/autocomplete', asyncHandler(productAutocomplete));
-router.get('/products', validateQuery(productListQuerySchema), asyncHandler(getProducts));
-router.get('/products/:slug', asyncHandler(getProduct));
 
 router.post(
   '/products/:slug/reviews',

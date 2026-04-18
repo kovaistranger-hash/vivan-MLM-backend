@@ -1,62 +1,159 @@
-import bcrypt from 'bcryptjs';
-import type { PoolConnection } from 'mysql2/promise';
-import { env } from '../../config/env.js';
-import { execute, pool, query } from '../../db/mysql.js';
-import { ApiError } from '../../utils/ApiError.js';
-import { generateRefreshToken, hashToken, refreshExpiresAt, signAccessToken } from './auth.tokens.js';
-import { grantWelcomeBonusIfNeeded } from '../mlm/commission.service.js';
-import { findPlacement } from '../mlm/placement.service.js';
-import {
-  createReferralProfileForNewCustomer,
-  getUserIdByReferralCode,
-  type RegisterReferralInput
-} from '../referral/referral.service.js';
-import { writeAuditLog } from '../compliance/auditLog.service.js';
-import { ensureReferralSchemaExists } from '../mlm/schema.service.js';
-import { createNotification } from '../notifications/notification.service.js';
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { pool, query } from "../../db/mysql.js";
+import { ensureReferralSchemaExists } from "../mlm/schema.service.js";
+import { grantWelcomeBonusIfNeeded } from "../mlm/commission.service.js";
+import { createReferralProfileForNewCustomer, type RegisterReferralInput } from "../referral/referral.service.js";
 
-interface UserRow {
+export type UserRow = {
   id: number;
   name: string;
   email: string;
-  phone: string | null;
   password_hash: string;
+  phone: string | null;
+  role: "user" | "admin";
   is_active: number;
-  role_slug: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+};
+
+type LoginInput = {
+  email: string;
+  password: string;
+};
+
+function slugToJwtRole(slug: string): "user" | "admin" {
+  return slug === "admin" ? "admin" : "user";
 }
 
-async function findUserByEmail(email: string) {
-  const rows = await query<UserRow[]>(
-    `SELECT u.*, r.slug AS role_slug
+async function getCustomerRoleId(): Promise<number | null> {
+  const rows = await query<{ id: number }[]>(
+    `SELECT id FROM roles WHERE slug = ? LIMIT 1`,
+    ["customer"]
+  );
+  return rows[0]?.id ?? null;
+}
+
+async function rowFromDb(id: number): Promise<UserRow | null> {
+  const rows = await query<
+    Array<{
+      id: number;
+      name: string;
+      email: string;
+      password_hash: string;
+      phone: string | null;
+      role_slug: string;
+      is_active: number;
+      created_at: Date | string;
+      updated_at: Date | string;
+    }>
+  >(
+    `SELECT u.id, u.name, u.email, u.password_hash, u.phone, u.is_active, u.created_at, u.updated_at,
+            r.slug AS role_slug
      FROM users u
      INNER JOIN roles r ON r.id = u.role_id
-     WHERE u.email = :email
+     WHERE u.id = ?
      LIMIT 1`,
-    { email }
+    [id]
   );
-  return rows[0] || null;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    password_hash: r.password_hash,
+    phone: r.phone,
+    role: slugToJwtRole(r.role_slug),
+    is_active: r.is_active,
+    created_at: String(r.created_at),
+    updated_at: String(r.updated_at)
+  };
 }
 
-async function getRoleId(slug: string) {
-  const rows = await query<{ id: number }[]>('SELECT id FROM roles WHERE slug = :slug LIMIT 1', { slug });
-  return rows[0]?.id;
+/** Schema is provisioned by existing migrations / `initDB`; nothing to create here for Vivan. */
+export async function initAuthTables() {
+  /* no-op */
 }
 
-export async function registerUser(
-  input: {
-    name: string;
-    email: string;
-    phone?: string;
-    password: string;
-    acceptedTerms: boolean;
-    signupIp?: string | null;
-  } & RegisterReferralInput
-) {
+export async function findUserByEmail(email: string): Promise<UserRow | null> {
+  const rows = await query<
+    Array<{
+      id: number;
+      name: string;
+      email: string;
+      password_hash: string;
+      phone: string | null;
+      role_slug: string;
+      is_active: number;
+      created_at: Date | string;
+      updated_at: Date | string;
+    }>
+  >(
+    `SELECT u.id, u.name, u.email, u.password_hash, u.phone, u.is_active, u.created_at, u.updated_at,
+            r.slug AS role_slug
+     FROM users u
+     INNER JOIN roles r ON r.id = u.role_id
+     WHERE LOWER(TRIM(u.email)) = ?
+     LIMIT 1`,
+    [email.toLowerCase().trim()]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    password_hash: r.password_hash,
+    phone: r.phone,
+    role: slugToJwtRole(r.role_slug),
+    is_active: r.is_active,
+    created_at: String(r.created_at),
+    updated_at: String(r.updated_at)
+  };
+}
+
+export async function findUserById(id: number): Promise<UserRow | null> {
+  return rowFromDb(id);
+}
+
+export function signAccessToken(user: Pick<UserRow, "id" | "name" | "email" | "role">) {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET is missing");
+  }
+
+  return jwt.sign(
+    {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    },
+    jwtSecret,
+    {
+      expiresIn: "7d"
+    }
+  );
+}
+
+export async function registerUser(input: RegisterInput) {
   const existing = await findUserByEmail(input.email);
-  if (existing) throw new ApiError(409, 'Email already registered');
+  if (existing) {
+    throw new Error("Email already registered");
+  }
 
-  const customerRoleId = await getRoleId('customer');
-  if (!customerRoleId) throw new ApiError(500, 'Roles not seeded');
+  const customerRoleId = await getCustomerRoleId();
+  if (!customerRoleId) {
+    throw new Error("Roles not seeded (missing customer role)");
+  }
 
   await ensureReferralSchemaExists();
 
@@ -65,55 +162,42 @@ export async function registerUser(
   const c = await pool.getConnection();
   try {
     await c.beginTransaction();
-    const acceptedTerms = input.acceptedTerms === true ? 1 : 0;
     const [ins]: any = await c.query(
-      `INSERT INTO users (role_id, email, password_hash, name, phone, signup_ip, is_active, accepted_terms)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-      [customerRoleId, input.email, passwordHash, input.name, input.phone || null, input.signupIp || null, acceptedTerms]
+      `INSERT INTO users (role_id, email, password_hash, name, phone, is_active, accepted_terms)
+       VALUES (?, ?, ?, ?, ?, 1, 1)`,
+      [
+        customerRoleId,
+        input.email.toLowerCase().trim(),
+        passwordHash,
+        input.name.trim(),
+        input.phone?.trim() || null
+      ]
     );
     const userId = Number(ins.insertId);
 
-    const referralInput: RegisterReferralInput = {
-      sponsorReferralCode: input.sponsorReferralCode,
-      placementParentReferralCode: input.placementParentReferralCode,
-      placementSide: input.placementSide
-    };
-
-    const sponsorCode = input.sponsorReferralCode?.trim();
-    const explicitPlacementParent = input.placementParentReferralCode?.trim();
-    if (sponsorCode && !explicitPlacementParent) {
-      const sponsorId = await getUserIdByReferralCode(sponsorCode);
-      if (sponsorId) {
-        const placement = await findPlacement(c, sponsorId);
-        const parent_id = placement.parent_id;
-        const position = placement.position;
-        referralInput.autoPlacement = { parent_id, position };
-      }
-    }
-
+    const referralInput: RegisterReferralInput = {};
     await createReferralProfileForNewCustomer(c, userId, referralInput);
     await grantWelcomeBonusIfNeeded(c, userId);
 
-    const user = { id: userId, name: input.name, email: input.email, role: 'customer' as const };
-    const tokens = await issueAuthTokens(user, c);
     await c.commit();
-    const sponsorRows = await query<{ sponsor_user_id: number | null }[]>(
-      `SELECT sponsor_user_id FROM referral_users WHERE user_id = :userId LIMIT 1`,
-      { userId }
-    );
-    const sponsorId = sponsorRows[0]?.sponsor_user_id;
-    if (sponsorId != null && Number(sponsorId) > 0) {
-      void createNotification(
-        undefined,
-        Number(sponsorId),
-        `${input.name} joined your team (new referral signup).`
-      ).catch(() => undefined);
+
+    const user = await findUserById(userId);
+    if (!user) {
+      throw new Error("Failed to create user");
     }
-    void writeAuditLog(`user_register:${userId}`, userId).catch(() => undefined);
-    void import('../admin/fraud.service.js')
-      .then(({ evaluateFraudRiskForUser }) => evaluateFraudRiskForUser(userId))
-      .catch(() => {});
-    return tokens;
+
+    const token = signAccessToken(user);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role
+      }
+    };
   } catch (e) {
     await c.rollback();
     throw e;
@@ -122,88 +206,33 @@ export async function registerUser(
   }
 }
 
-export async function loginUser(input: { email: string; password: string }) {
-  const row = await findUserByEmail(input.email);
-  if (!row || !row.is_active) throw new ApiError(401, 'Invalid credentials');
+export async function loginUser(input: LoginInput) {
+  const user = await findUserByEmail(input.email);
 
-  const valid = await bcrypt.compare(input.password, row.password_hash);
-  if (!valid) throw new ApiError(401, 'Invalid credentials');
-
-  const user = { id: row.id, name: row.name, email: row.email, role: row.role_slug };
-  return issueAuthTokens(user);
-}
-
-export async function refreshSession(refreshToken: string) {
-  if (!refreshToken) throw new ApiError(400, 'Refresh token required');
-  const tokenHash = hashToken(refreshToken);
-  const rows = await query<{ user_id: number; expires_at: Date }[]>(
-    `SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = :tokenHash LIMIT 1`,
-    { tokenHash }
-  );
-  const row = rows[0];
-  if (!row) throw new ApiError(401, 'Invalid refresh token');
-  if (new Date(row.expires_at) < new Date()) {
-    await execute('DELETE FROM refresh_tokens WHERE token_hash = :tokenHash', { tokenHash });
-    throw new ApiError(401, 'Refresh token expired');
+  if (!user) {
+    throw new Error("Invalid email or password");
   }
 
-  const users = await query<UserRow[]>(
-    `SELECT u.*, r.slug AS role_slug
-     FROM users u
-     INNER JOIN roles r ON r.id = u.role_id
-     WHERE u.id = :id
-     LIMIT 1`,
-    { id: row.user_id }
-  );
-  const u = users[0];
-  if (!u || !u.is_active) throw new ApiError(401, 'User inactive');
-
-  return {
-    accessToken: signAccessToken({ id: u.id, email: u.email, role: u.role_slug }),
-    user: { id: u.id, name: u.name, email: u.email, role: u.role_slug }
-  };
-}
-
-export async function revokeRefreshToken(refreshToken: string) {
-  if (!refreshToken) return;
-  const tokenHash = hashToken(refreshToken);
-  await execute('DELETE FROM refresh_tokens WHERE token_hash = :tokenHash', { tokenHash });
-}
-
-export async function revokeAllRefreshTokens(userId: number) {
-  await execute('DELETE FROM refresh_tokens WHERE user_id = :userId', { userId });
-}
-
-export async function saveExpoPushToken(userId: number, expoPushToken: string) {
-  const t = String(expoPushToken || '').trim();
-  if (t.length < 20 || t.length > 512) throw new ApiError(400, 'Invalid push token');
-  await ensureReferralSchemaExists();
-  await execute(`UPDATE users SET expo_token = ? WHERE id = ?`, [t, userId]);
-}
-
-async function issueAuthTokens(user: { id: number; name: string; email: string; role: string }, conn?: PoolConnection) {
-  const accessToken = signAccessToken({ id: user.id, email: user.email, role: user.role });
-  const refreshToken = generateRefreshToken();
-  const tokenHash = hashToken(refreshToken);
-  const expiresAt = refreshExpiresAt();
-
-  if (conn) {
-    await conn.query(`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)`, [
-      user.id,
-      tokenHash,
-      expiresAt
-    ]);
-  } else {
-    await execute(
-      `INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (:userId, :tokenHash, :expiresAt)`,
-      { userId: user.id, tokenHash, expiresAt }
-    );
+  if (!user.is_active) {
+    throw new Error("User account is inactive");
   }
 
+  const isPasswordValid = await bcrypt.compare(input.password, user.password_hash);
+
+  if (!isPasswordValid) {
+    throw new Error("Invalid email or password");
+  }
+
+  const token = signAccessToken(user);
+
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
-    accessToken,
-    refreshToken,
-    expiresIn: env.jwtAccessExpiresIn
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role
+    }
   };
 }

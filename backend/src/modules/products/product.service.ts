@@ -1,8 +1,17 @@
 import { query } from '../../db/mysql.js';
-import { storefrontCategorySlugSqlList } from '../categories/storefrontCategories.js';
 
 function truthyFlag(v?: string) {
   return v === '1' || v === 'true';
+}
+
+function publicCategoryVisibilityClause(alias = 'p') {
+  return `(
+    ${alias}.category_id IS NULL
+    OR EXISTS (
+      SELECT 1 FROM categories _cat
+      WHERE _cat.id = ${alias}.category_id AND _cat.is_active = 1
+    )
+  )`;
 }
 
 export async function listProducts(params: {
@@ -20,12 +29,7 @@ export async function listProducts(params: {
   offset?: number;
 }) {
   const where: string[] = ['p.is_active = 1', 'p.deleted_at IS NULL'];
-  const storefrontCatClause = `EXISTS (
-    SELECT 1 FROM categories _sf
-    WHERE _sf.id = p.category_id AND _sf.is_active = 1
-    AND _sf.slug IN (${storefrontCategorySlugSqlList()})
-  )`;
-  where.push(storefrontCatClause);
+  where.push(publicCategoryVisibilityClause('p'));
   const values: Record<string, unknown> = {
     limit: params.limit ?? 20,
     offset: params.offset ?? 0
@@ -101,15 +105,10 @@ export async function listProducts(params: {
 
 export async function autocompleteProducts(q: string, limit = 8) {
   if (!q.trim()) return [];
-  const storefrontCatClause = `EXISTS (
-    SELECT 1 FROM categories _sf
-    WHERE _sf.id = p.category_id AND _sf.is_active = 1
-    AND _sf.slug IN (${storefrontCategorySlugSqlList()})
-  )`;
   return query<any[]>(
     `SELECT p.id, p.name, p.slug, p.sale_price, p.mrp_price, p.image_url
      FROM products p
-     WHERE p.is_active = 1 AND p.deleted_at IS NULL AND (${storefrontCatClause}) AND (p.name LIKE :q OR p.sku LIKE :q)
+     WHERE p.is_active = 1 AND p.deleted_at IS NULL AND ${publicCategoryVisibilityClause('p')} AND (p.name LIKE :q OR p.sku LIKE :q)
      ORDER BY p.name ASC
      LIMIT :limit`,
     { q: `%${q}%`, limit }
@@ -146,15 +145,10 @@ export async function getProductBySlug(slug: string) {
     { productId: product.id }
   );
 
-  const storefrontCatClause = `EXISTS (
-    SELECT 1 FROM categories _sf
-    WHERE _sf.id = p.category_id AND _sf.is_active = 1
-    AND _sf.slug IN (${storefrontCategorySlugSqlList()})
-  )`;
   const related = await query<any[]>(
     `SELECT p.id, p.name, p.slug, p.sale_price, p.mrp_price, p.image_url, p.bv, p.pv
      FROM products p
-     WHERE p.is_active = 1 AND p.deleted_at IS NULL AND (${storefrontCatClause})
+     WHERE p.is_active = 1 AND p.deleted_at IS NULL AND ${publicCategoryVisibilityClause('p')}
        AND p.category_id = :categoryId AND p.id <> :productId
      ORDER BY p.is_bestseller DESC, p.id DESC
      LIMIT 6`,

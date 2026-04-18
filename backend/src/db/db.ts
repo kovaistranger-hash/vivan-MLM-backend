@@ -1,142 +1,194 @@
-import mysql, { ResultSetHeader } from 'mysql2/promise';
-import type { ConnectionOptions, PoolOptions } from 'mysql2';
-import { DB_URL } from '../config/env.js';
-import { logger } from '../utils/logger.js';
+import "dotenv/config";
+import mysql from "mysql2/promise";
+import type { ResultSetHeader } from "mysql2/promise";
+import { ensureApplicationSchemaExists } from "../modules/mlm/schema.service.js";
+import { logger } from "../utils/logger.js";
+import {
+  setDatabaseConfig,
+  setDatabaseConnected,
+  setSchemaBootstrapped,
+  setStartupPhase
+} from "../utils/runtimeHealth.js";
 
-/**
- * Pool from `DB_URL`. `namedPlaceholders` + `ssl` stay on the options object so `:name` params and hosted MySQL keep working
- * (string-only `createPool(url)` cannot set those flags in mysql2).
- */
+type DatabaseConfig = {
+  url: string;
+  source: string;
+  host: string | null;
+  database: string | null;
+};
+
+function summarizeDatabaseUrl(value: string): Pick<DatabaseConfig, "host" | "database"> {
+  try {
+    const parsed = new URL(value);
+    return {
+      host: parsed.hostname || null,
+      database: parsed.pathname.replace(/^\//, "") || null
+    };
+  } catch {
+    return {
+      host: null,
+      database: null
+    };
+  }
+}
+
+function pickDatabaseConfig(): DatabaseConfig | null {
+  const candidates: Array<{ source: string; value: string | undefined }> = [
+    { source: "DATABASE_URL", value: process.env.DATABASE_URL },
+    { source: "DB_URL", value: process.env.DB_URL },
+    { source: "MYSQL_URL", value: process.env.MYSQL_URL },
+    { source: "MYSQL_PRIVATE_URL", value: process.env.MYSQL_PRIVATE_URL },
+    { source: "MYSQL_PUBLIC_URL", value: process.env.MYSQL_PUBLIC_URL }
+  ];
+
+  for (const { source, value: raw } of candidates) {
+    const value = raw?.trim();
+    if (value) {
+      return {
+        url: value,
+        source,
+        ...summarizeDatabaseUrl(value)
+      };
+    }
+  }
+
+  const host = (process.env.MYSQLHOST || process.env.DB_HOST || "").trim();
+  const user = (process.env.MYSQLUSER || process.env.DB_USER || "").trim();
+  const name = (process.env.MYSQLDATABASE || process.env.DB_NAME || "").trim();
+
+  if (!host || !user || !name) {
+    return null;
+  }
+
+  const password = process.env.MYSQLPASSWORD ?? process.env.DB_PASSWORD ?? '';
+  const port = Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306);
+  const url = new URL(`mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${name}`);
+
+  return {
+    url: url.toString(),
+    source: process.env.MYSQLHOST ? "MYSQLHOST/MYSQLUSER/MYSQLDATABASE" : "DB_HOST/DB_USER/DB_NAME",
+    host,
+    database: name
+  };
+}
+
+const databaseConfig = (() => {
+  const value = pickDatabaseConfig();
+  if (!value) {
+    throw new Error(
+      'Missing database configuration. Set DATABASE_URL/DB_URL/MYSQL_URL/MYSQL_PRIVATE_URL or Railway MYSQLHOST/MYSQLUSER/MYSQLDATABASE or DB_HOST/DB_USER/DB_NAME.'
+    );
+  }
+  return value;
+})();
+
+setDatabaseConfig({
+  configured: true,
+  source: databaseConfig.source,
+  host: databaseConfig.host,
+  database: databaseConfig.database
+});
+
 export const pool = mysql.createPool({
-  uri: DB_URL,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  uri: databaseConfig.url,
+  ssl: {
+    rejectUnauthorized: false,
+  },
   namedPlaceholders: true,
-  ssl: { rejectUnauthorized: false }
-} as PoolOptions);
+});
 
-const DB_CONNECT_MAX_ATTEMPTS = Math.max(1, Number(process.env.DB_CONNECT_MAX_ATTEMPTS || 12));
-const DB_CONNECT_BASE_DELAY_MS = Math.max(200, Number(process.env.DB_CONNECT_BASE_DELAY_MS || 1000));
+export default pool;
+
+const DB_CONNECT_MAX_ATTEMPTS = Math.max(
+  1,
+  Number(process.env.DB_CONNECT_MAX_ATTEMPTS || 12)
+);
+
+const DB_CONNECT_BASE_DELAY_MS = Math.max(
+  200,
+  Number(process.env.DB_CONNECT_BASE_DELAY_MS || 1000)
+);
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Ping pool with exponential backoff until MySQL accepts connections or attempts are exhausted. */
 export async function waitForDatabaseConnection(): Promise<void> {
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= DB_CONNECT_MAX_ATTEMPTS; attempt++) {
     let conn: Awaited<ReturnType<typeof pool.getConnection>> | undefined;
+
     try {
       conn = await pool.getConnection();
       await conn.ping();
-      logger.info('MySQL connection ready', { attempt });
+      setDatabaseConnected(true, null);
+      logger.info("MySQL connection ready", { attempt });
       return;
     } catch (e) {
       lastErr = e;
-      logger.warn('MySQL connection failed, retrying', {
+      setDatabaseConnected(false, e instanceof Error ? e.message : String(e));
+      logger.warn("MySQL connection failed, retrying", {
         attempt,
         maxAttempts: DB_CONNECT_MAX_ATTEMPTS,
-        err: e instanceof Error ? e.message : String(e)
+        err: e instanceof Error ? e.message : String(e),
       });
     } finally {
       conn?.release();
     }
 
     if (attempt < DB_CONNECT_MAX_ATTEMPTS) {
-      const backoff = Math.min(30_000, DB_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1));
+      const backoff = Math.min(
+        30000,
+        DB_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1)
+      );
       await sleep(backoff);
     }
   }
 
-  logger.error('MySQL connection exhausted retries', { err: lastErr });
+  logger.error("MySQL connection exhausted retries", { err: lastErr });
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-const tempDbReset =
-  process.env.DB_TEMP_RESET === '1' || String(process.env.DB_TEMP_RESET || '').toLowerCase() === 'true';
-
-const referralHardReset =
-  !tempDbReset &&
-  (process.env.DB_REFERRAL_HARD_RESET === '1' ||
-    String(process.env.DB_REFERRAL_HARD_RESET || '').toLowerCase() === 'true');
-
-/**
- * **`DB_TEMP_RESET=1`**: drops `commission_transactions`, `binary_carry`, `referral_closure`, `referral_users`,
- * `orders`, `users`, then schema bootstrap (no FKs in bootstrap DDL — stabilizing).
- * Use **once** on a dev DB, then **unset** and run `database/schema.sql` + `npm run seed` so `users` matches the app.
- *
- * Schema bootstrap creates **`users`** first (`CREATE IF NOT EXISTS`), then orders → referral → binary → commission.
- *
- * **`DB_REFERRAL_HARD_RESET=1`** (without temp reset): drops **`referral_users` only**, then bootstrap.
- */
-/** Single `mysql.createConnection` config for init (not the pool). Same URI + flags as the pool. */
-function bootstrapConnectionOptions(): ConnectionOptions {
-  const ssl = { rejectUnauthorized: false } as const;
-  return {
-    uri: DB_URL,
-    namedPlaceholders: true,
-    ssl
-  } as ConnectionOptions;
-}
-
-/**
- * Init DDL on **one** connection (`createConnection`, not `pool`): `SET FOREIGN_KEY_CHECKS = 0` → optional
- * drops (`DB_TEMP_RESET`) → `ensureReferralSchemaExists(conn)` → `SET FOREIGN_KEY_CHECKS = 1`.
- */
 async function createTables() {
-  const initConn = await mysql.createConnection(bootstrapConnectionOptions());
+  const initConn = await mysql.createConnection({
+    uri: databaseConfig.url,
+    ssl: { rejectUnauthorized: false },
+    namedPlaceholders: true,
+  });
 
   try {
+    setStartupPhase('bootstrapping_schema');
+    setSchemaBootstrapped(false, null);
     await initConn.query(`SET FOREIGN_KEY_CHECKS = 0`);
-
-    if (tempDbReset) {
-      logger.warn(
-        'DB_TEMP_RESET: dropping commission_transactions, binary_carry, referral_closure, referral_users, orders, users'
-      );
-      await initConn.query(`DROP TABLE IF EXISTS commission_transactions`);
-      await initConn.query(`DROP TABLE IF EXISTS binary_carry`);
-      await initConn.query(`DROP TABLE IF EXISTS referral_closure`);
-      await initConn.query(`DROP TABLE IF EXISTS referral_users`);
-      await initConn.query(`DROP TABLE IF EXISTS orders`);
-      await initConn.query(`DROP TABLE IF EXISTS users`);
-    } else if (referralHardReset) {
-      logger.warn('DB_REFERRAL_HARD_RESET: dropping referral_users only');
-      await initConn.query(`DROP TABLE IF EXISTS referral_users`);
-    }
-
-    const { ensureReferralSchemaExists } = await import('../modules/mlm/schema.service.js');
-    await ensureReferralSchemaExists(initConn);
+    await ensureApplicationSchemaExists(initConn);
 
     await initConn.query(`SET FOREIGN_KEY_CHECKS = 1`);
-
-    logger.info('Tables created successfully');
+    setSchemaBootstrapped(true, null);
+    logger.info("Tables created successfully");
   } catch (err) {
-    logger.error('Table creation failed', { err: err instanceof Error ? err.message : String(err) });
+    setSchemaBootstrapped(false, err instanceof Error ? err.message : String(err));
+    logger.error("Table creation failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
     throw err;
   } finally {
     await initConn.end();
   }
 }
 
-/**
- * Wait until DB is reachable (retries), then ping, then ensure tables.
- * Call **`await initDB()`** before `app.listen()` (see `server.ts`).
- */
 export async function initDB() {
   await waitForDatabaseConnection();
 
   const conn = await pool.getConnection();
   try {
     await conn.ping();
+    setDatabaseConnected(true, null);
   } finally {
     conn.release();
   }
 
-  logger.info('MySQL connected');
-
+  logger.info("MySQL connected");
   await createTables();
 }
 
@@ -154,4 +206,12 @@ export async function execute(
 ): Promise<ResultSetHeader> {
   const [result] = await pool.execute(sql, params as any);
   return result as ResultSetHeader;
+}
+
+export function getDatabaseConfigSummary() {
+  return {
+    source: databaseConfig.source,
+    host: databaseConfig.host,
+    database: databaseConfig.database
+  };
 }

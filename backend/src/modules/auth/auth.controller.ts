@@ -1,88 +1,115 @@
-import { Request, Response } from 'express';
-import { query } from '../../db/mysql.js';
+import type { Request, Response } from "express";
+import { ApiError } from '../../utils/ApiError.js';
+import { loginSchema, registerSchema as authSchemaRegister } from './auth.schemas.js';
+import { findUserById } from './auth.service.js';
+import { loginUserLegacy, registerUser as registerSessionUser, revokeRefreshToken } from './auth.legacy.service.js';
 import { getClientIp } from '../../utils/clientIp.js';
-import { jsonSafeValue } from '../../utils/jsonSafe.js';
-import { getReferralRow, toReferralProfileDto } from '../referral/referral.service.js';
-import {
-  loginUser,
-  refreshSession,
-  registerUser,
-  revokeAllRefreshTokens,
-  revokeRefreshToken,
-  saveExpoPushToken
-} from './auth.service.js';
 
 export async function register(req: Request, res: Response) {
-  const result = await registerUser({ ...req.body, signupIp: getClientIp(req) });
-  res.status(201).json({ success: true, ...result });
+  try {
+    const parsed = authSchemaRegister.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: parsed.error.flatten()
+      });
+    }
+
+    const result = await registerSessionUser({
+      ...parsed.data,
+      signupIp: getClientIp(req)
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      ...result
+    });
+  } catch (error) {
+    const status = error instanceof ApiError ? error.statusCode : 400;
+    return res.status(status).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Registration failed"
+    });
+  }
 }
 
 export async function login(req: Request, res: Response) {
-  const result = await loginUser(req.body);
-  res.json({ success: true, ...result });
-}
+  try {
+    const parsed = loginSchema.safeParse(req.body);
 
-export async function refresh(req: Request, res: Response) {
-  const refreshToken = String(req.body?.refreshToken || '');
-  const result = await refreshSession(refreshToken);
-  res.json({ success: true, ...result });
-}
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: parsed.error.flatten()
+      });
+    }
 
-export async function logout(req: Request, res: Response) {
-  const refreshToken = String(req.body?.refreshToken || '');
-  await revokeRefreshToken(refreshToken);
-  res.json({ success: true });
-}
+    const result = await loginUserLegacy(parsed.data);
 
-export async function logoutAll(req: Request, res: Response) {
-  await revokeAllRefreshTokens(req.user!.id);
-  res.json({ success: true });
-}
-
-export async function savePushToken(req: Request, res: Response) {
-  const body = (req as any).validatedBody as { expoPushToken: string };
-  await saveExpoPushToken(req.user!.id, body.expoPushToken);
-  res.json({ success: true });
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      ...result
+    });
+  } catch (error) {
+    const status = error instanceof ApiError ? error.statusCode : 401;
+    return res.status(status).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Login failed"
+    });
+  }
 }
 
 export async function me(req: Request, res: Response) {
-  const uid = req.user!.id;
-  const rows = await query<any[]>(
-    `SELECT u.id, u.name, u.email, u.phone, u.gst_number, u.accepted_terms, u.\`rank\` AS rank, r.slug AS role
-     FROM users u
-     INNER JOIN roles r ON r.id = u.role_id
-     WHERE u.id = :id
-     LIMIT 1`,
-    { id: uid }
-  );
-  const user = rows[0];
-  if (!user) {
-    res.status(404).json({ success: false, message: 'User not found' });
-    return;
-  }
-
-  let referralCode = '';
   try {
-    const refRow = await getReferralRow(uid);
-    const ref = toReferralProfileDto(refRow);
-    const r = ref as { referral_code?: string; referralCode?: string; code?: string } | null;
-    for (const p of [r?.referral_code, r?.referralCode, r?.code]) {
-      if (typeof p === 'string' && p.trim()) {
-        referralCode = p.trim();
-        break;
-      }
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
     }
-  } catch (e) {
-    console.error('[auth] me: referral profile', e);
+
+    const user = await findUserById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        is_active: !!user.is_active,
+        created_at: user.created_at
+      }
+    });
+  } catch {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch user profile"
+    });
+  }
+}
+
+export async function logout(_req: Request, res: Response) {
+  const refreshToken = String(_req.body?.refreshToken || '');
+  if (refreshToken) {
+    await revokeRefreshToken(refreshToken);
   }
 
-  res.json({
+  return res.status(200).json({
     success: true,
-    user: jsonSafeValue({
-      ...user,
-      referralCode,
-      referral_code: referralCode,
-      code: referralCode || null
-    })
+    message: "Logout successful"
   });
 }

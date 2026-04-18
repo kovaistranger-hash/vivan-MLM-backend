@@ -1,8 +1,19 @@
-import 'express-serve-static-core';
+import "express";
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    /** Correlation id for logs and error responses (set by `requestIdMiddleware`). */
-    id?: string;
+declare global {
+  namespace Express {
+    interface UserPayload {
+      id: number;
+      name?: string;
+      email: string;
+      role: "user" | "admin" | string;
+    }
+
+    interface Request {
+      id?: string;
+      user?: UserPayload;
+    }
   }
 }
+
+export {};
